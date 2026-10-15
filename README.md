@@ -4,7 +4,7 @@ A command line for everyday life. One input box: the first characters decide whe
 
 - Local-first: no accounts, no backend, no network calls, no ads, no analytics, no AI. Everything is rule-based and deterministic.
 - Fast: opens with the keyboard up, shows what Enter will do while you type, evaluates math live, and shows one best answer only when it is clearly right.
-- Built with React Native + Expo SDK 58 (TypeScript), runs in **Expo Go** on Android.
+- Built with React Native + Expo **SDK 57** (TypeScript), runs in **Expo Go** on Android. (SDK 57 because the Play Store Expo Go does not support SDK 58 yet; moving up later is a version bump.)
 
 ---
 
@@ -19,7 +19,7 @@ A command line for everyday life. One input box: the first characters decide whe
    npm -v
    ```
 2. **Git**: install from <https://git-scm.com/download/win> (defaults are fine).
-3. **Expo Go**: on your phone, install **Expo Go** from the Google Play Store. It must be the current version (it runs SDK 58 projects).
+3. **Expo Go**: on your phone, install **Expo Go** from the Google Play Store. Update it to the current Play Store version (it must support SDK 57).
 
 ### Get the code and start
 
@@ -125,13 +125,13 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 |---|---|---|
 | Home-screen shortcut / widget that opens straight into the input | Not possible (out of scope) | App shortcuts, a widget, a quick-settings tile |
 | App name and icon in the launcher | Runs inside Expo Go | Own icon, own "NimbleNote" app |
-| Exact-time alarms | Local notifications are scheduled with `alarmClock` delivery, but Expo Go doesn't have the exact-alarm permission, so Android falls back to best effort. Notifications can arrive late, especially in Doze/battery saver. No full-screen alarm UI. | `SCHEDULE_EXACT_ALARM` (already declared in `app.json`), on-time delivery, alarm sound/full-screen intent |
+| Exact-time alarms | Local notifications are scheduled for the exact time, but without the exact-alarm permission Android delivers them on a best-effort basis. Notifications can arrive late, especially in Doze/battery saver. No full-screen alarm UI. | `SCHEDULE_EXACT_ALARM` (already declared in `app.json`), on-time delivery, alarm sound/full-screen intent |
 | Remote push | Not available since SDK 53 (not used anyway) | Available (not needed) |
 | Whole-database encryption (SQLCipher) | Not available; only hidden values are encrypted | `expo-sqlite` with SQLCipher |
 | Cold-start speed | Includes Expo Go start and loading the JS bundle from your PC over Wi-Fi | Real release build: bundle on device, Hermes bytecode, much faster |
 | Expo Go warning about `expo-notifications` | A yellow "not fully supported in Expo Go" notice can appear the first time you set a timer | Gone |
 
-Everything else (SQLite, secure store, crypto, biometrics, location, camera, file system, sharing, document picker, clipboard, haptics, Reanimated, gesture handler) is bundled in Expo Go SDK 58 and works.
+Everything else (SQLite, secure store, crypto, biometrics, location, camera, file system, sharing, document picker, clipboard, haptics, Reanimated, gesture handler) is bundled in Expo Go SDK 57 and works.
 
 ---
 

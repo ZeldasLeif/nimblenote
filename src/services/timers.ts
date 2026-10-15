@@ -48,9 +48,6 @@ export async function startTimer(label: string, firesAt: number): Promise<TimerR
           type: Notifications.SchedulableTriggerInputTypes.DATE,
           date: new Date(firesAt),
           channelId: CHANNEL,
-          // Uses setAlarmClock() when the exact-alarm permission exists (development build);
-          // otherwise Android falls back to best effort, which may be late by a little.
-          delivery: 'alarmClock',
         },
       });
       notified = true;
