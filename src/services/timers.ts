@@ -1,13 +1,19 @@
 // Timers and alarms as scheduled local notifications (works in Expo Go; remote push is not used).
+// expo-notifications is loaded on first use so it costs nothing at cold start.
 
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { store } from './appStore';
+
+type NotificationsModule = typeof import('expo-notifications');
+let mod: Promise<NotificationsModule> | null = null;
+const notifications = () => (mod ??= import('expo-notifications'));
+
 
 const CHANNEL = 'timers';
 let prepared = false;
 
 async function prepare(): Promise<boolean> {
+  const Notifications = await notifications();
   if (!prepared) {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
@@ -35,6 +41,7 @@ export async function startTimer(label: string, firesAt: number): Promise<TimerR
   let notified = false;
   try {
     if (await prepare()) {
+      const Notifications = await notifications();
       notificationId = await Notifications.scheduleNotificationAsync({
         content: { title: label || 'Timer', body: label ? 'Time is up' : 'Your timer is done' },
         trigger: {
@@ -58,7 +65,7 @@ export async function startTimer(label: string, firesAt: number): Promise<TimerR
 export async function cancelTimer(id: number): Promise<void> {
   const t = store.getState().timers.find((x) => x.id === id);
   if (t?.notificationId) {
-    try { await Notifications.cancelScheduledNotificationAsync(t.notificationId); } catch { /* already fired */ }
+    try { await (await notifications()).cancelScheduledNotificationAsync(t.notificationId); } catch { /* already fired */ }
   }
   await store.finishTimer(id);
 }
