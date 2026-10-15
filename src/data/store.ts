@@ -329,6 +329,18 @@ export class Store {
     return { message, categoryId: catId, highlight: [...inserted, ...updated.map((u) => u.id)], undoable: changed };
   }
 
+  /** Returns the category's id, creating it (undoably) if needed. */
+  async ensureCategory(ref: { key: string; name: string; type: CategoryType }): Promise<number> {
+    const existing = this.categoryByKey(ref.key);
+    if (existing) return existing.id;
+    const id = await this.insertCategory(ref.name, ref.key, ref.type);
+    this.pushUndo(`Created ${ref.name}`, async () => {
+      await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [this.now(), id]);
+    });
+    await this.reload();
+    return id;
+  }
+
   async addNote(text: string): Promise<Outcome> {
     const r = await this.db.run('INSERT INTO notes (text, created_at) VALUES (?, ?)', [text, this.now()]);
     const id = r.lastInsertRowId;
