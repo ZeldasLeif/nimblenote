@@ -67,6 +67,9 @@ export function SettingsView({ onMessage, reduceMotion }: { onMessage: (m: strin
       <Row label="Street address for “loc”" detail="Uses Android's built-in geocoder, which may contact Google services">
         <Switch value={s.settings.reverseGeocode} onValueChange={(v) => set('reverseGeocode', v)} />
       </Row>
+      {hasLock === false ? (
+        <Text style={[styles.note, { color: t.warn }]}>This phone has no screen lock, so hidden values and the app lock cannot be protected.</Text>
+      ) : null}
       <Text style={[styles.note, { color: t.muted }]}>
         Hidden categories (passwords by default) are encrypted on this phone and need authentication to show. This is a convenience, not a password manager.
       </Text>

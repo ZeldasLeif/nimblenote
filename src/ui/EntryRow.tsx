@@ -43,6 +43,7 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
     if (revealed !== null) return revealed;
     const a = await authenticate('Show hidden value');
     if (!a.ok) { onMessage(a.reason); return null; }
+    if (a.noDeviceLock) onMessage('Shown without a check: this phone has no screen lock');
     const v = await store.reveal(entry);
     setRevealed(v);
     return v;
