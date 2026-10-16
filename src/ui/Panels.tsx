@@ -10,51 +10,56 @@ import type { LocResult } from '../services/location';
 import { viewDoc } from './describe';
 import { fmtDateTime } from './format';
 import { Button, Chip, Flash, SectionTitle } from './kit';
+import { SwipeAway } from './SwipeAway';
 import { useMotion } from './motion';
 import { RADIUS, SPACE, TOUCH, useTheme } from './theme';
 
-/** One best match in a fixed slot. Re-keyed per document so the text swaps with a very short fade, never stacking. */
-export const PeekCard = memo(function PeekCard({ best, onOpen }: { best: Scored | null; onOpen: (s: Scored) => void }) {
+/** A centered answer card: bold title, one smaller labelled line. Swipe left to throw it off the screen. */
+function AnswerCard({ s, onOpen, onDismiss }: { s: Scored; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
   const t = useTheme();
-  const motion = useMotion();
-  const v = best ? viewDoc(best.doc) : null;
+  const v = viewDoc(s.doc);
+  if (!v) return null;
   return (
-    <View style={styles.peekSlot}>
-      {best && v ? (
-        <Animated.View key={best.doc.id} entering={motion.peek}>
-          <Pressable onPress={() => onOpen(best)} style={({ pressed }) => [styles.peek, { backgroundColor: t.surface, borderColor: t.border, opacity: pressed ? 0.8 : 1 }]}>
-            {v.photoUri ? <Image source={{ uri: v.photoUri }} style={styles.peekPhoto} /> : null}
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.peekTitle, { color: t.muted }]} numberOfLines={1}>{v.title}</Text>
-              <Text style={[styles.peekDetail, { color: t.text }]} numberOfLines={2}>{v.detail}</Text>
-            </View>
-          </Pressable>
-        </Animated.View>
-      ) : null}
-    </View>
+    <SwipeAway onDismiss={() => onDismiss(s)}>
+      <Pressable
+        onPress={() => onOpen(s)}
+        accessibilityRole="button"
+        accessibilityHint="Opens it. Swipe left to dismiss."
+        style={({ pressed }) => [styles.card, { backgroundColor: t.surface, borderColor: t.border, opacity: pressed ? 0.85 : 1 }]}
+      >
+        {v.photoUri ? <Image source={{ uri: v.photoUri }} style={styles.cardPhoto} /> : null}
+        <Text style={[styles.cardTitle, { color: t.text }]} numberOfLines={2}>{v.title}</Text>
+        <Text style={[styles.cardDetail, { color: t.muted }]} numberOfLines={3}>{v.detail}</Text>
+      </Pressable>
+    </SwipeAway>
+  );
+}
+
+/** The one best match while typing, directly above the input. Re-keyed per document so text swaps with a very short fade, never stacking. */
+export const PeekCard = memo(function PeekCard({ best, onOpen, onDismiss }: { best: Scored | null; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
+  const motion = useMotion();
+  if (!best) return null;
+  return (
+    <Animated.View key={best.doc.id} entering={motion.peek} style={styles.peekSlot}>
+      <AnswerCard s={best} onOpen={onOpen} onDismiss={onDismiss} />
+    </Animated.View>
   );
 });
 
-export function ResultsList({ results, onOpen }: { results: Scored[]; onOpen: (s: Scored) => void }) {
+/** All results after Enter, best match nearest the input. */
+export function ResultsList({ results, onOpen, onDismiss }: { results: Scored[]; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
   const t = useTheme();
   const motion = useMotion();
   if (results.length === 0) {
-    return <Text style={[styles.empty, { color: t.muted }]}>Nothing found. Save something with “+ name value”.</Text>;
+    return <Text style={[styles.empty, { color: t.muted, textAlign: 'center' }]}>Nothing found. Save something with “+ name value”.</Text>;
   }
   return (
-    <View>
-      {results.map((r) => {
-        const v = viewDoc(r.doc);
-        if (!v) return null;
-        return (
-          <Animated.View key={r.doc.id} entering={motion.card}>
-            <Pressable onPress={() => onOpen(r)} style={({ pressed }) => [styles.result, { borderBottomColor: t.border, opacity: pressed ? 0.7 : 1 }]}>
-              <Text style={[styles.resultTitle, { color: t.text }]} numberOfLines={1}>{v.title}</Text>
-              <Text style={[styles.resultDetail, { color: t.muted }]} numberOfLines={2}>{v.detail}</Text>
-            </Pressable>
-          </Animated.View>
-        );
-      })}
+    <View style={styles.results}>
+      {[...results].reverse().map((r) => (
+        <Animated.View key={r.doc.id} entering={motion.card} exiting={motion.itemExit} layout={motion.layout} style={styles.resultGap}>
+          <AnswerCard s={r} onOpen={onOpen} onDismiss={onDismiss} />
+        </Animated.View>
+      ))}
     </View>
   );
 }
@@ -86,6 +91,7 @@ export function NotesView({ notes, label, highlight, onMessage }: { notes: Note[
   );
 }
 
+/** The second screen (swipe right on an empty home screen): everything you have saved, grouped by type. */
 export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
   const t = useTheme();
   const s = useAppState();
@@ -96,18 +102,20 @@ export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
   }
   return (
     <View style={styles.pad}>
+      <Text style={[styles.panelTitle, { color: t.text, textAlign: 'center', paddingHorizontal: 0 }]}>Your lists</Text>
       {groups.map(([type, label]) => {
         const cats = byType(type);
         if (cats.length === 0) return null;
         return (
           <View key={type}>
             <SectionTitle>{label}</SectionTitle>
-            <View style={styles.chips}>
+            <View style={[styles.chips, { justifyContent: 'center' }]}>
               {cats.map((c) => <Chip key={c.id} label={`${c.name} · ${store.entriesOf(c.id).length}`} onPress={() => onOpen(c.id)} />)}
             </View>
           </View>
         );
       })}
+      <Text style={[styles.hint, { color: t.faint, textAlign: 'center' }]}>Swipe left or tap the title to go back.</Text>
     </View>
   );
 }
@@ -141,6 +149,7 @@ const HELP: Array<[string, string]> = [
   ['groceries', 'Look up anything: a list, a fact, where something is'],
   ["when is my dad's birthday?", 'Questions work: filler words are ignored'],
   ['+ groceries eggs, milk, olive oil', 'Add to a list (created on first use). Split on commas and “and”'],
+  ['add to groceries eggs:6, flour:1kg', 'Amounts after a colon go in their own column'],
   ['+ bank pin: 4533', 'Save a fact: colon separates key and value'],
   ['+pw bankpin2 4321', 'Without colon the last word is the value if it looks like one'],
   ['+ keys sofa', 'Remember where something is (or “+loc drill garage”)'],
@@ -167,22 +176,24 @@ export function HelpView() {
         </View>
       ))}
       <Text style={[styles.hint, { color: t.faint, paddingHorizontal: 0 }]}>
-        After opening a list, just type to add to it. Tap the title to return to search. Swipe left or long-press an entry to delete; every change can be undone.
+        Swipe a result card left to dismiss it (nothing is deleted). Swipe right on the empty home screen for your lists. Inside a list, swipe an entry left or long-press it to delete; every change can be undone.
       </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  peekSlot: { minHeight: 76, paddingHorizontal: SPACE.l, paddingTop: SPACE.s },
-  peek: { flexDirection: 'row', alignItems: 'center', minHeight: 64, borderRadius: RADIUS.l, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
-  peekPhoto: { width: 44, height: 44, borderRadius: RADIUS.s, marginRight: SPACE.m },
-  peekTitle: { fontSize: 13, fontWeight: '600' },
-  peekDetail: { fontSize: 18, marginTop: 2 },
+  peekSlot: { paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
+  card: {
+    alignItems: 'center', minHeight: 72, borderRadius: RADIUS.l, borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l,
+  },
+  cardPhoto: { width: 64, height: 64, borderRadius: RADIUS.m, marginBottom: SPACE.s },
+  cardTitle: { fontSize: 21, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2 },
+  cardDetail: { fontSize: 15, marginTop: 4, textAlign: 'center', lineHeight: 20 },
+  results: { paddingHorizontal: SPACE.l },
+  resultGap: { marginTop: SPACE.s },
   empty: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, fontSize: 15 },
-  result: { minHeight: TOUCH + 8, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, borderBottomWidth: StyleSheet.hairlineWidth, justifyContent: 'center' },
-  resultTitle: { fontSize: 17, fontWeight: '500' },
-  resultDetail: { fontSize: 15, marginTop: 2 },
   panelTitle: { fontSize: 22, fontWeight: '700', paddingHorizontal: SPACE.l, paddingTop: SPACE.m, paddingBottom: SPACE.s },
   note: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: TOUCH },
   noteText: { fontSize: 17 },

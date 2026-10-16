@@ -4,7 +4,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
-import { FadeIn, FadeInDown, FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import { FadeIn, FadeInUp, FadeOut, LinearTransition, ReduceMotion, SlideInLeft, SlideOutLeft } from 'react-native-reanimated';
 import type { AnimationPref } from '../data/store';
 
 export type MotionMode = AnimationPref; // 'smooth' | 'minimal' | 'off'
@@ -25,7 +25,7 @@ const RM = ReduceMotion.System;
 
 export function makeMotion(mode: MotionMode) {
   if (mode === 'off') {
-    return { card: undefined, peek: undefined, item: undefined, itemExit: undefined, layout: undefined, toast: undefined, toastExit: undefined, highlightMs: 0 };
+    return { card: undefined, peek: undefined, item: undefined, itemExit: undefined, layout: undefined, toast: undefined, toastExit: undefined, screenIn: undefined, screenOut: undefined, highlightMs: 0 };
   }
   if (mode === 'minimal') {
     return {
@@ -36,17 +36,21 @@ export function makeMotion(mode: MotionMode) {
       layout: undefined,
       toast: FadeIn.duration(90).reduceMotion(RM),
       toastExit: FadeOut.duration(80).reduceMotion(RM),
+      screenIn: FadeIn.duration(90).reduceMotion(RM),
+      screenOut: FadeOut.duration(80).reduceMotion(RM),
       highlightMs: 500,
     };
   }
   return {
-    card: FadeIn.duration(120).reduceMotion(RM),
+    card: FadeInUp.duration(140).reduceMotion(RM), // content sits above the input, so it rises into place
     peek: FadeIn.duration(70).reduceMotion(RM), // very short crossfade-in; never an exit, so nothing stacks while typing
-    item: FadeInDown.duration(170).reduceMotion(RM),
+    item: FadeInUp.duration(170).reduceMotion(RM),
     itemExit: FadeOut.duration(140).reduceMotion(RM),
     layout: LinearTransition.duration(170).reduceMotion(RM), // collapse after delete
-    toast: FadeInDown.duration(150).reduceMotion(RM),
+    toast: FadeInUp.duration(150).reduceMotion(RM),
     toastExit: FadeOut.duration(120).reduceMotion(RM),
+    screenIn: SlideInLeft.duration(200).reduceMotion(RM), // the lists screen comes in from the left (swipe right)
+    screenOut: SlideOutLeft.duration(160).reduceMotion(RM),
     highlightMs: 900,
   };
 }

@@ -61,7 +61,7 @@ export function CategoryView({ category: c, highlight, onMessage, onClosed }: Pr
 
       {entries.length === 0 ? (
         <Text style={[styles.empty, { color: t.muted }]}>
-          {c.type === 'list' ? 'Empty. Type items above and press Enter.' : c.type === 'place' ? 'No location yet.' : 'No entries yet. Type “name: value”.'}
+          {c.type === 'list' ? `Empty. Add with “+ ${c.name} eggs:6, milk”.` : c.type === 'place' ? 'No location yet.' : `No entries yet. Add with “+ ${c.name} name: value”.`}
         </Text>
       ) : null}
 
@@ -179,17 +179,17 @@ function CategoryMenu({ category: c, onMessage, onClosed, onDone }: { category: 
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: SPACE.l, paddingTop: SPACE.m, paddingBottom: SPACE.s, minHeight: 48 },
-  title: { fontSize: 22, fontWeight: '700', flexShrink: 1 },
-  badge: { fontSize: 12, marginLeft: SPACE.s, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
-  more: { fontSize: 22, marginLeft: 'auto', paddingHorizontal: SPACE.s },
+  header: { alignItems: 'center', paddingHorizontal: SPACE.xl, paddingTop: SPACE.m, paddingBottom: SPACE.s, minHeight: 48 },
+  title: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  badge: { fontSize: 12, marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
+  more: { position: 'absolute', right: SPACE.l, top: SPACE.m, fontSize: 22, paddingHorizontal: SPACE.s },
   photo: { marginHorizontal: SPACE.l, borderRadius: RADIUS.m, marginBottom: SPACE.m },
-  empty: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, fontSize: 15 },
+  empty: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, fontSize: 15, textAlign: 'center' },
   sub: { paddingHorizontal: SPACE.l, paddingTop: SPACE.m, fontSize: 12, fontWeight: '600', letterSpacing: 0.8, textTransform: 'uppercase' },
-  place: { paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
+  place: { paddingHorizontal: SPACE.l, paddingBottom: SPACE.s, alignItems: 'center' },
   placeNow: { fontSize: 28, fontWeight: '600' },
   placeTime: { fontSize: 14, marginTop: 2, marginBottom: SPACE.m },
-  chips: { flexDirection: 'row', flexWrap: 'wrap' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
   menu: { marginHorizontal: SPACE.l, marginBottom: SPACE.m, padding: SPACE.l, borderRadius: RADIUS.l, borderWidth: StyleSheet.hairlineWidth, gap: SPACE.s },
   label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase', marginTop: SPACE.s },
   input: { fontSize: 17, borderWidth: 1, borderRadius: RADIUS.s, paddingHorizontal: SPACE.m, minHeight: 44 },

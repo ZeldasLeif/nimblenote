@@ -47,7 +47,7 @@ export function TimersStrip() {
 }
 
 const styles = StyleSheet.create({
-  strip: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: SPACE.l, paddingTop: SPACE.s, gap: SPACE.s },
+  strip: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', paddingHorizontal: SPACE.l, paddingBottom: SPACE.s, gap: SPACE.s },
   timer: { flexDirection: 'row', alignItems: 'center', borderRadius: RADIUS.m, paddingLeft: SPACE.m, minHeight: 36, maxWidth: '100%' },
   time: { fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
   label: { fontSize: 14, marginLeft: SPACE.s, flexShrink: 1 },

@@ -3,6 +3,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import Animated from 'react-native-reanimated';
+import { parseAmount } from '../core/parse';
 import type { Entry } from '../data/store';
 import { store } from '../services/appStore';
 import { authenticate } from '../services/auth';
@@ -52,7 +53,7 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
   const startEdit = async () => {
     const v = await reveal();
     if (v === null) return;
-    setDraft(entry.key ? `${entry.key}: ${v}` : v);
+    setDraft(entry.key ? `${entry.key}: ${v}` : entry.amount ? `${v}:${entry.amount}` : v);
     setEditing(true);
     setMenu(false);
   };
@@ -67,7 +68,9 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
       const value = i > 0 ? text.slice(i + 1).trim() : text;
       onMessage((await store.updateEntry(entry.id, { key, value })).message);
     } else {
-      onMessage((await store.updateEntry(entry.id, { value: text })).message);
+      // List item: "eggs:6" edits the amount too; removing ":6" clears it.
+      const { text: value, amount } = parseAmount(text);
+      onMessage((await store.updateEntry(entry.id, { value, amount })).message);
     }
     setRevealed(null);
   };
@@ -121,6 +124,7 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
                 <Text style={[styles.value, { color: t.text }, isSecret && revealed === null && { color: t.faint, letterSpacing: 2 }]} selectable={!isSecret}>
                   {shown}
                 </Text>
+                {entry.amount ? <Text style={[styles.amount, { color: t.muted }]}>{entry.amount}</Text> : null}
                 {showTime ? <Text style={[styles.time, { color: t.faint }]}>{relTime(entry.createdAt)}</Text> : null}
               </View>
             )}
@@ -155,6 +159,7 @@ const styles = StyleSheet.create({
   key: { fontSize: 15, marginRight: SPACE.m, maxWidth: '45%' },
   value: { fontSize: 17, flexShrink: 1 },
   time: { fontSize: 13, marginLeft: 'auto', paddingLeft: SPACE.s },
+  amount: { fontSize: 16, marginLeft: 'auto', paddingLeft: SPACE.m, fontVariant: ['tabular-nums'], textAlign: 'right', minWidth: 56 },
   edit: { fontSize: 17, borderBottomWidth: 2, paddingVertical: 4 },
   swipeAction: { flex: 1, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: SPACE.xl, borderRadius: RADIUS.s },
   menu: { flexDirection: 'row', gap: SPACE.s, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderBottomWidth: StyleSheet.hairlineWidth },

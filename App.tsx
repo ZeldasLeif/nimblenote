@@ -2,6 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 import { initStore, useAppState } from './src/services/appStore';
 import { forgetAuth } from './src/services/auth';
@@ -50,6 +51,7 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: palette.bg }}>
       {/* initialWindowMetrics: render the first frame immediately instead of waiting for native insets. */}
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <KeyboardProvider>
         <ThemeContext.Provider value={palette}>
           <MotionContext.Provider value={motion}>
             <View style={{ flex: 1, backgroundColor: palette.bg }}>
@@ -58,6 +60,7 @@ export default function App() {
             <StatusBar style={palette.dark ? 'light' : 'dark'} />
           </MotionContext.Provider>
         </ThemeContext.Provider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

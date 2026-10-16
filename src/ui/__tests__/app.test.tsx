@@ -1,6 +1,6 @@
 // End-to-end smoke test of the real screen: renders App, types commands, presses Enter.
 // Storage runs on node:sqlite; native modules are mocked by jest-expo.
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 // Minimal Reanimated stand-in: layout animations become no-ops, Animated.View is a View.
 jest.mock('react-native-reanimated', () => {
@@ -13,11 +13,14 @@ jest.mock('react-native-reanimated', () => {
     __esModule: true,
     default: { View: RN.View, Text: RN.Text, ScrollView: RN.ScrollView, createAnimatedComponent: passthrough },
     createAnimatedComponent: passthrough,
-    FadeIn: anim, FadeOut: anim, FadeInDown: anim, LinearTransition: anim,
+    FadeIn: anim, FadeOut: anim, FadeInDown: anim, FadeInUp: anim, LinearTransition: anim, SlideInLeft: anim, SlideOutLeft: anim,
     ReduceMotion: { System: 'system', Always: 'always', Never: 'never' },
     useSharedValue: (v: unknown) => ({ value: v }),
     useAnimatedStyle: () => ({}),
-    withTiming: (v: unknown) => v,
+    withTiming: (v: unknown, _c?: unknown, done?: (finished: boolean) => void) => { done?.(true); return v; },
+    withSpring: (v: unknown) => v,
+    useEvent: () => () => {},
+    setGestureState: () => {},
     interpolate: () => 0,
   };
 });
@@ -39,6 +42,10 @@ jest.mock('../../services/appStore', () => {
 });
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
+jest.mock('react-native-keyboard-controller', () => require('react-native-keyboard-controller/jest'));
+jest.mock('react-native-worklets', () => ({ scheduleOnRN: (fn: (...a: unknown[]) => void, ...args: unknown[]) => fn(...args) }));
+
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 
 import App from '../../../App';
 
@@ -64,19 +71,19 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('olive oil')).toBeTruthy());
     expect(screen.getByText('Added 3 to groceries')).toBeTruthy();
 
-    // Context: the input now adds to the viewed list
-    expect(screen.getByPlaceholderText('add to groceries')).toBeTruthy();
-    await type('toilet paper');
+    // No sticky "add to" mode: the input is a normal command line again
+    expect(screen.getByPlaceholderText('search · + to save · 5+5 · help')).toBeTruthy();
+
+    // "add to <list>" with amounts in their own column
+    await type('add to groceries toilet paper, flour:1kg');
+    expect(screen.getByText(/groceries: add 2 items “toilet paper”, “flour” \(1kg\)/)).toBeTruthy();
     await enter();
     await waitFor(() => expect(screen.getByText('toilet paper')).toBeTruthy());
+    expect(screen.getByText('1kg')).toBeTruthy();
 
     // Undo from the toast
     await fireEvent.press(screen.getByText('Undo'));
     await waitFor(() => expect(screen.queryByText('toilet paper')).toBeNull());
-
-    // Tap the title: back to normal search
-    await fireEvent.press(screen.getByLabelText('NimbleNote, back to search'));
-    expect(screen.getByPlaceholderText('search · + to save · 5+5 · help')).toBeTruthy();
 
     // Calculator evaluates live; Enter replaces the input with the result
     await type('5+5');
@@ -91,15 +98,29 @@ describe('App', () => {
     await waitFor(() => expect(screen.getAllByText('sofa').length).toBeGreaterThan(0));
     await fireEvent.press(screen.getByLabelText('NimbleNote, back to search'));
 
-    // Live answer card after the debounce
+    // Live answer card: centered title + labelled line
     await type('where are my keys?');
-    await waitFor(() => expect(screen.getByText(/sofa · just now/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Location: sofa · just now')).toBeTruthy());
+    expect(screen.getByText('keys')).toBeTruthy();
+
+    // Swipe the card left: it is thrown away (not deleted) and stays away for this query
+    await act(async () => { fireGestureHandler(getByGestureTestId('swipe-away'), [
+      { translationX: 0, velocityX: 0 }, { translationX: -60, velocityX: -900 }, { translationX: -160, velocityX: -1200 },
+    ]); });
+    await waitFor(() => expect(screen.queryByText('Location: sofa · just now')).toBeNull());
+    expect(require('../../services/appStore').store.categoryByKey('key')).toBeTruthy();
 
     // Enter on a category name opens it
     await type('groceries');
     await enter();
-    await waitFor(() => expect(screen.getByPlaceholderText('add to groceries')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('olive oil')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('NimbleNote, back to search'));
+
+    // Swipe right on the empty home screen: your lists; swipe left: back
+    await act(async () => { fireGestureHandler(getByGestureTestId('library-swipe'), [{ translationX: 0 }, { translationX: 40 }, { translationX: 120 }]); });
+    await waitFor(() => expect(screen.getByText('Your lists')).toBeTruthy());
+    await act(async () => { fireGestureHandler(getByGestureTestId('library-swipe'), [{ translationX: 0 }, { translationX: -40 }, { translationX: -120 }]); });
+    await waitFor(() => expect(screen.queryByText('Your lists')).toBeNull());
 
     // Facts and forgiving reads
     await type('+ dad birthday 12.03.1960');

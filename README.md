@@ -72,7 +72,8 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 | `groceries` | Read. Shows the one best match live (card under the input). Enter opens it or lists all results. | Enter = full results |
 | `dad birthday` · `birthday dad` · `when is my dad's birthday?` | Same answer: filler words (when, is, my, the, what, where, …) are dropped, plurals and possessives normalized, order ignored. | |
 | `+ groceries eggs, milk, olive oil` | Write: adds 3 items. First write creates the list. Splits on commas, `;` and the word **and**, never on spaces ("olive oil" stays one item). Text is stored exactly as typed, no autocorrect. | yes |
-| `add …` / `new …` | Same as `+`. `new list groceries` creates the list, or, if it exists, adds to it with a one-line note. `add eggs to groceries` also works for existing lists. | yes |
+| `add …` / `new …` | Same as `+`. `add to groceries eggs` works too (a leading "to" is ignored), as does `add eggs to groceries` for existing lists. `new list groceries` creates the list, or, if it exists, adds to it with a one-line note. | yes |
+| `+groceries eggs:5, flour:1kg, water:200ml` | Amounts: `item:amount` stores the amount in its own column. Writing an item that is already on the list with a new amount updates it. In a brand-new category write it tight (`eggs:5`); `pin: 4533` with a space is a fact. | yes |
 | `+ bank pin: 4533` | Fact: a colon separates key (`pin`) and value (`4533`) in category `bank`. | yes |
 | `+pw bankpin2 4321` | Fact without colon: the last token is the value if it looks like one (number, date, time, code with digits, email, phone). `pw` is an alias for `passwords`. | yes |
 | `+ movies the matrix` | Last token is not value-like → list items. | yes |
@@ -94,7 +95,7 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 
 **Category type** (list, facts, location) is set by the first entry and can be switched in the hidden menu.
 
-**Context beats commands.** After you open or write to a list, the input becomes "add to groceries": just type and press Enter. For a location it becomes "keys is now at…". Tap the title, the `groceries ×` chip, or empty space (or press back / backspace on an empty input) to return to normal search.
+**Layout and gestures.** The app name stays at the top; the input sits directly on the keyboard, and answers appear just above it (centered card: bold name, one labelled line such as "Location: bathroom"). Every entry is its own command: after saving, the input is a normal command line again. Swipe a result card **left** to throw it off the screen (it is only hidden, nothing is deleted). Swipe **right** on the empty home screen for "Your lists" (all categories); swipe left or tap the title to come back. `l` opens it too.
 
 **Delete and edit.** Swipe an entry left, or long-press it for Edit / Copy / Delete. Every write and delete shows an Undo button; `undo` also works. Tap a category's title (or `⋯`) for the hidden menu: rename, change type, split on spaces, hide & encrypt, photo, delete.
 
@@ -149,7 +150,6 @@ Everything else (SQLite, secure store, crypto, biometrics, location, camera, fil
 
 - **Not tested on a physical phone by the author of this prototype.** The type checker, 159 Jest tests (including a full simulated UI flow) and an Android production bundle (`npx expo export --platform android`) pass, but gestures, keyboard behaviour, permissions and notifications need a real-device pass.
 - Where's-what detection uses a fixed list of item names and prepositions. `+ drill garage` (no preposition, not a known item) becomes a list called "drill" containing "garage". Reading `drill` still shows "garage", and you can switch the type in the hidden menu or use `+loc`.
-- In "add to list" context, everything you type is added to that list, including things that look like commands (`t 5`). The preview line always says what will happen; tap the title first to run a command.
 - Live answers require high confidence: two-letter prefixes and ties between equally good matches show nothing until Enter. This is intentional (no flicker) but can feel conservative.
 - Writes are strict: no fuzzy matching of category names on write (a typo creates a new category; delete it with undo).
 - Timers live in notifications plus an in-app countdown; they can't be undone, but each has a × to cancel. Settings changes are not on the undo stack.
