@@ -25,7 +25,7 @@ const RM = ReduceMotion.System;
 
 export function makeMotion(mode: MotionMode) {
   if (mode === 'off') {
-    return { card: undefined, peek: undefined, item: undefined, itemExit: undefined, layout: undefined, toast: undefined, toastExit: undefined, screenIn: undefined, screenOut: undefined, highlightMs: 0 };
+    return { card: undefined, peek: undefined, item: undefined, itemExit: undefined, layout: undefined, toast: undefined, toastExit: undefined, screenIn: undefined, screenOut: undefined, swapIn: undefined, swapOut: undefined, highlightMs: 0 };
   }
   if (mode === 'minimal') {
     return {
@@ -38,6 +38,8 @@ export function makeMotion(mode: MotionMode) {
       toastExit: FadeOut.duration(80).reduceMotion(RM),
       screenIn: FadeIn.duration(90).reduceMotion(RM),
       screenOut: FadeOut.duration(80).reduceMotion(RM),
+      swapIn: FadeIn.duration(80).reduceMotion(RM),
+      swapOut: FadeOut.duration(60).reduceMotion(RM),
       highlightMs: 500,
     };
   }
@@ -51,6 +53,9 @@ export function makeMotion(mode: MotionMode) {
     toastExit: FadeOut.duration(120).reduceMotion(RM),
     screenIn: SlideInLeft.duration(200).reduceMotion(RM), // the lists screen comes in from the left (swipe right)
     screenOut: SlideOutLeft.duration(160).reduceMotion(RM),
+    // The stage (one answer, list or panel at a time): old and new overlap, so it reads as a crossfade.
+    swapIn: FadeIn.duration(160).reduceMotion(RM),
+    swapOut: FadeOut.duration(120).reduceMotion(RM),
     highlightMs: 900,
   };
 }

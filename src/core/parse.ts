@@ -38,7 +38,11 @@ const TYPE_KEYWORDS: Record<string, CategoryType> = {
 export function resolveName(name: string, catalog: Catalog): string {
   const k = nameKey(name);
   const target = catalog.aliases.get(k);
-  return target ? nameKey(target) : k;
+  const key = target ? nameKey(target) : k;
+  if (catalog.categories.has(key)) return key;
+  // A renamed category keeps its key; it is also found by its displayed name.
+  for (const c of catalog.categories.values()) if (nameKey(c.name) === key) return c.key;
+  return key;
 }
 
 /** Split list text on commas, semicolons, newlines and the word "and". Never on spaces unless asked. */

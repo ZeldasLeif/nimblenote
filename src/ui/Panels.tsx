@@ -1,6 +1,5 @@
-// Peek card, results list, notes, categories, location and help panels.
+// Answer card, notes, your lists, location and help panels.
 
-import { memo } from 'react';
 import { Image, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import type { Scored } from '../core/match';
@@ -10,61 +9,36 @@ import type { LocResult } from '../services/location';
 import { viewDoc } from './describe';
 import { fmtDateTime } from './format';
 import { Button, Chip, Flash, SectionTitle } from './kit';
-import { SwipeAway } from './SwipeAway';
+import { Draggable } from './trash';
 import { useMotion } from './motion';
 import { RADIUS, SPACE, TOUCH, useTheme } from './theme';
 
-/** A centered answer card: bold title, one smaller labelled line. Swipe left to throw it off the screen. */
-function AnswerCard({ s, onOpen, onDismiss }: { s: Scored; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
+/**
+ * The answer card: title on top, then each smaller line on its own row, all centered.
+ * Tap opens it; hold and drag it to the trash to delete what it shows.
+ */
+export function AnswerCard({ s, onOpen }: { s: Scored; onOpen: (s: Scored) => void }) {
   const t = useTheme();
   const v = viewDoc(s.doc);
   if (!v) return null;
   return (
-    <SwipeAway onDismiss={() => onDismiss(s)}>
-      <Pressable
-        onPress={() => onOpen(s)}
+    <Draggable target={{ kind: v.kind, id: v.id, label: v.title }} onTap={() => onOpen(s)} testID="answer">
+      <View
         accessibilityRole="button"
-        accessibilityHint="Opens it. Swipe left to dismiss."
-        style={({ pressed }) => [styles.card, { backgroundColor: t.surface, boxShadow: t.shadow, opacity: pressed ? 0.85 : 1 }]}
+        accessibilityHint="Tap to open. Hold and drag to the trash to delete. Swipe left to dismiss."
+        style={[styles.card, { backgroundColor: t.surface, boxShadow: t.shadow }]}
       >
         {v.photoUri ? <Image source={{ uri: v.photoUri }} style={styles.cardPhoto} /> : null}
         <Text style={[styles.cardTitle, { color: t.text, fontFamily: t.display }]} numberOfLines={2}>{v.title}</Text>
-        <Text style={[styles.cardDetail, { color: t.muted }]} numberOfLines={3}>{v.detail}</Text>
-      </Pressable>
-    </SwipeAway>
+        {v.lines.map((line, i) => (
+          <Text key={i} style={[styles.cardDetail, { color: i === 0 && v.lines.length > 1 ? t.text : t.muted }]} numberOfLines={3}>{line}</Text>
+        ))}
+      </View>
+    </Draggable>
   );
 }
 
-/** The one best match while typing, directly above the input. Re-keyed per document so text swaps with a very short fade, never stacking. */
-export const PeekCard = memo(function PeekCard({ best, onOpen, onDismiss }: { best: Scored | null; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
-  const motion = useMotion();
-  if (!best) return null;
-  return (
-    <Animated.View key={best.doc.id} entering={motion.peek} style={styles.peekSlot}>
-      <AnswerCard s={best} onOpen={onOpen} onDismiss={onDismiss} />
-    </Animated.View>
-  );
-});
-
-/** All results after Enter, best match nearest the input. */
-export function ResultsList({ results, onOpen, onDismiss }: { results: Scored[]; onOpen: (s: Scored) => void; onDismiss: (s: Scored) => void }) {
-  const t = useTheme();
-  const motion = useMotion();
-  if (results.length === 0) {
-    return <Text style={[styles.empty, { color: t.muted, textAlign: 'center' }]}>Nothing found. Save something with “+ name value”.</Text>;
-  }
-  return (
-    <View style={styles.results}>
-      {[...results].reverse().map((r) => (
-        <Animated.View key={r.doc.id} entering={motion.card} exiting={motion.itemExit} layout={motion.layout} style={styles.resultGap}>
-          <AnswerCard s={r} onOpen={onOpen} onDismiss={onDismiss} />
-        </Animated.View>
-      ))}
-    </View>
-  );
-}
-
-export function NotesView({ notes, label, highlight, onMessage }: { notes: Note[]; label: string; highlight: ReadonlySet<number>; onMessage: (m: string, undoable?: boolean) => void }) {
+export function NotesView({ notes, label, highlight }: { notes: Note[]; label: string; highlight: ReadonlySet<number> }) {
   const t = useTheme();
   const motion = useMotion();
   useAppState();
@@ -75,18 +49,16 @@ export function NotesView({ notes, label, highlight, onMessage }: { notes: Note[
       {notes.map((n) => (
         <Animated.View key={n.id} entering={motion.item} exiting={motion.itemExit} layout={motion.layout}>
           <Flash on={highlight.has(n.id)}>
-            <Pressable
-              onLongPress={async () => onMessage((await store.deleteNote(n.id)).message, true)}
-              style={[styles.note, { borderBottomColor: t.border }]}
-              accessibilityHint="Long press to delete"
-            >
-              <Text style={[styles.noteText, { color: t.text }]} selectable>{n.text}</Text>
-              <Text style={[styles.noteTime, { color: t.faint }]}>{fmtDateTime(n.createdAt)}</Text>
-            </Pressable>
+            <Draggable target={{ kind: 'note', id: n.id, label: n.text }}>
+              <View style={[styles.note, { borderBottomColor: t.border }]} accessibilityHint="Hold and drag to the trash to delete">
+                <Text style={[styles.noteText, { color: t.text }]}>{n.text}</Text>
+                <Text style={[styles.noteTime, { color: t.faint }]}>{fmtDateTime(n.createdAt)}</Text>
+              </View>
+            </Draggable>
           </Flash>
         </Animated.View>
       ))}
-      {notes.length > 0 ? <Text style={[styles.hint, { color: t.faint }]}>Long-press a note to delete it.</Text> : null}
+      {notes.length > 0 ? <Text style={[styles.hint, { color: t.faint, textAlign: 'center' }]}>Hold a note and drag it to the trash to delete it.</Text> : null}
     </View>
   );
 }
@@ -185,7 +157,7 @@ export function HelpView() {
         </View>
       ))}
       <Text style={[styles.hint, { color: t.faint, paddingHorizontal: 0 }]}>
-        Swipe a result card left to dismiss it (nothing is deleted). Swipe right on the empty home screen for your lists. Inside a list, swipe an entry left or long-press it to delete; every change can be undone.
+        Swipe anything left to clear it from the screen (nothing is deleted). Swipe right on the empty home screen for your lists. Tap a title to rename it, tap an item to edit it. Hold a title, item or card and drag it to the trash to delete it; every change can be undone.
       </Text>
     </View>
   );

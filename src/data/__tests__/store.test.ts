@@ -79,16 +79,25 @@ describe('Store', () => {
     expect(store.getState().entries[0].value).toBe('abc123');
   });
 
-  it("where's-what keeps history and offers frequent locations as chips", async () => {
+  it("where's-what keeps only the latest location (no history), undoable", async () => {
     const { store } = await makeStore();
-    for (const loc of ['sofa', 'kitchen', 'sofa', 'hallway', 'sofa', 'kitchen', 'desk']) await run(store, `+ keys ${loc}`);
+    for (const loc of ['sofa', 'kitchen', 'desk']) await run(store, `+ keys ${loc}`);
     const keys = store.categoryByKey('key')!;
     expect(keys.type).toBe('place');
-    expect(store.placeHistory(keys.id)[0].value).toBe('desk');
-    expect(store.placeChips(keys.id)).toEqual(['sofa', 'kitchen', 'hallway']);
-    // context mode: plain text moves the keys
-    await run(store, 'sofa', { kind: 'category', key: 'key' });
-    expect(store.placeHistory(keys.id)[0].value).toBe('sofa');
+    expect(store.entriesOf(keys.id).map((e) => e.value)).toEqual(['desk']);
+    await store.undo();
+    expect(store.entriesOf(keys.id).map((e) => e.value)).toEqual(['kitchen']);
+  });
+
+  it('rename changes only the displayed name; aliases and the new name both still resolve', async () => {
+    const { store } = await makeStore();
+    await run(store, '+ birthday dad: 12.03.1960');
+    const b = store.categoryByKey('birthday')!;
+    await store.renameCategory(b.id, 'Family birthdays');
+    await run(store, '+ bday mom: 01.05.1962'); // alias still lands in the same category
+    await run(store, '+ family-birthdays x: 1'); // unrelated new name, not a clash
+    expect(store.entriesOf(b.id).map((e) => e.key)).toEqual(['dad', 'mom']);
+    expect(store.categoryById(b.id)!.name).toBe('Family birthdays');
   });
 
   it('delete entry and undo', async () => {

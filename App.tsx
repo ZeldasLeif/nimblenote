@@ -1,6 +1,7 @@
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
+import * as SystemUI from 'expo-system-ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, useColorScheme, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -24,6 +25,9 @@ export default function App() {
   const palette = useMemo(() => (fontsLoaded ? { ...base, display: DISPLAY_FONT } : base), [base, fontsLoaded]);
   const motionMode = useEffectiveMotion(state.settings.animations);
   const motion = useMemo(() => makeMotion(motionMode), [motionMode]);
+
+  // Window color behind the (edge-to-edge) system bars: a deeper tone of the paper, never white.
+  useEffect(() => { SystemUI.setBackgroundColorAsync(palette.chrome).catch(() => {}); }, [palette.chrome]);
 
   // Storage opens after the first frame; the input is usable immediately.
   useEffect(() => { void initStore(); }, []);

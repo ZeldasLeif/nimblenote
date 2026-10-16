@@ -74,6 +74,26 @@ export function SettingsView({ onMessage, reduceMotion }: { onMessage: (m: strin
         Hidden categories (passwords by default) are encrypted on this phone and need authentication to show. This is a convenience, not a password manager.
       </Text>
 
+      <SectionTitle>Hidden</SectionTitle>
+      {s.categories.length === 0 ? <Text style={[styles.note, { color: t.muted }]}>Nothing saved yet.</Text> : null}
+      {s.categories.map((c) => (
+        <Row key={c.id} label={c.name} detail={c.sensitive ? 'Hidden and encrypted' : 'Shown'}>
+          <Switch
+            value={c.sensitive}
+            onValueChange={async (on) => {
+              const a = await authenticate(on ? 'Hide and encrypt values' : 'Unhide values');
+              if (!a.ok) return onMessage(a.reason);
+              onMessage((await store.setCategorySensitive(c.id, on)).message, true);
+            }}
+          />
+        </Row>
+      ))}
+
+      <SectionTitle>Deleting</SectionTitle>
+      <Row label="Ask before deleting" detail="Confirm when something is dropped on the trash can">
+        <Switch value={s.settings.confirmDelete} onValueChange={(v) => set('confirmDelete', v)} />
+      </Row>
+
       <SectionTitle>Aliases</SectionTitle>
       <AliasEditor onMessage={onMessage} />
 

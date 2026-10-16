@@ -18,9 +18,11 @@ export interface Settings {
   animations: AnimationPref;
   lockEnabled: boolean;
   reverseGeocode: boolean;
+  /** Ask "Are you sure?" before deleting something dropped on the trash can. */
+  confirmDelete: boolean;
 }
 export const DEFAULT_SETTINGS: Settings = {
-  theme: 'system', liveAnswers: true, animations: 'smooth', lockEnabled: false, reverseGeocode: true,
+  theme: 'system', liveAnswers: true, animations: 'smooth', lockEnabled: false, reverseGeocode: true, confirmDelete: true,
 };
 
 export interface Category {
@@ -201,28 +203,9 @@ export class Store {
     return this.state.categories.filter((c) => c.parentId === categoryId).sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  /** Place history, newest first. */
-  placeHistory(categoryId: number): Entry[] {
-    return this.entriesOf(categoryId).sort((a, b) => b.createdAt - a.createdAt);
-  }
-
-  /** Most frequent recent locations for one-tap chips, excluding the current one. */
-  placeChips(categoryId: number, limit = 5): string[] {
-    const hist = this.placeHistory(categoryId);
-    const current = hist[0]?.value ?? null;
-    const counts = new Map<string, { text: string; n: number; last: number }>();
-    for (const e of hist.slice(0, 30)) {
-      if (!e.value) continue;
-      const k = e.value.toLowerCase();
-      const c = counts.get(k);
-      if (c) c.n++;
-      else counts.set(k, { text: e.value, n: 1, last: e.createdAt });
-    }
-    return [...counts.values()]
-      .filter((c) => !sameText(c.text, current))
-      .sort((a, b) => b.n - a.n || b.last - a.last)
-      .slice(0, limit)
-      .map((c) => c.text);
+  /** The current location of a place: only the latest entry exists (no history). */
+  currentPlace(categoryId: number): Entry | undefined {
+    return this.entriesOf(categoryId).sort((a, b) => b.createdAt - a.createdAt)[0];
   }
 
   notesIn(range: { start: number; end: number } | null, limit = 100): Note[] {
@@ -289,6 +272,7 @@ export class Store {
     let createdParentId: number | null = null;
     let promotedEntryId: number | null = null;
     const inserted: number[] = [];
+    const replaced: number[] = [];
     const updated: Array<{ id: number; value: string | null; enc: string | null; amount: string | null; updatedAt: number }> = [];
     let message = '';
 
@@ -344,6 +328,11 @@ export class Store {
         ];
         message = parts.filter(Boolean).join(' · ');
       } else if (payload.type === 'place') {
+        // No history: the new location replaces the old one (undo brings the old one back).
+        for (const old of existing) {
+          await this.db.run('UPDATE entries SET deleted_at = ? WHERE id = ?', [this.now(), old.id]);
+          replaced.push(old.id);
+        }
         inserted.push(await this.insertEntry(catId, null, payload.location, sensitive, 0));
         message = `${ref.name} → ${payload.location}`;
       } else {
@@ -375,6 +364,7 @@ export class Store {
           if (createdCategoryId !== null) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, createdCategoryId]);
           if (createdParentId !== null) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, createdParentId]);
           if (promotedEntryId !== null) await this.db.run('UPDATE entries SET deleted_at = NULL WHERE id = ?', [promotedEntryId]);
+          for (const id of replaced) await this.db.run('UPDATE entries SET deleted_at = NULL WHERE id = ?', [id]);
         });
       });
     }
@@ -476,12 +466,16 @@ export class Store {
     return { message: label, categoryId: id, undoable: true };
   }
 
+  /**
+   * Changes only the displayed name. The internal key stays, so aliases that point at the old name
+   * ("bday" -> birthdays) keep working; the new name is found too (see resolveName).
+   */
   async renameCategory(id: number, name: string): Promise<Outcome> {
     const key = nameKey(name);
     if (!key) return { message: 'Name is empty', undoable: false };
-    const clash = this.categoryByKey(key);
-    if (clash && clash.id !== id) return { message: `${clash.name} already exists`, undoable: false };
-    return this.updateCategoryColumns(id, { name: clean(name), key }, `Renamed to ${clean(name)}`);
+    const clash = this.state.categories.find((c) => c.id !== id && (c.key === key || nameKey(c.name) === key));
+    if (clash) return { message: `${clash.name} already exists`, undoable: false };
+    return this.updateCategoryColumns(id, { name: clean(name) }, `Renamed to ${clean(name)}`);
   }
   setCategoryType(id: number, type: CategoryType): Promise<Outcome> {
     return this.updateCategoryColumns(id, { type }, `Now a ${type}`);

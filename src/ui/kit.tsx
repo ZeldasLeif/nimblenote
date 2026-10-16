@@ -72,7 +72,7 @@ export function Button({ label, onPress, tone, disabled }: { label: string; onPr
 
 /**
  * Two columns meeting at an invisible vertical center line: the left text is right-aligned against it,
- * the right text left-aligned ("flour | 500g"). With no left text, the right text is simply centered.
+ * the right text left-aligned ("flour | 500g"). If either side is empty, the other is simply centered.
  */
 export function Axis({ left, right, leftStyle, rightStyle, selectableRight }: {
   left: ReactNode;
@@ -81,9 +81,10 @@ export function Axis({ left, right, leftStyle, rightStyle, selectableRight }: {
   rightStyle?: StyleProp<TextStyle>;
   selectableRight?: boolean;
 }) {
-  if (left === null || left === undefined || left === '') {
-    return <Text style={[styles.axisSolo, rightStyle]} selectable={selectableRight}>{right}</Text>;
-  }
+  const empty = (v: ReactNode) => v === null || v === undefined || v === '';
+  // One side empty: behave like a single, centered column.
+  if (empty(left)) return <Text style={[rightStyle, styles.axisSolo]} selectable={selectableRight}>{right}</Text>;
+  if (empty(right)) return <Text style={[leftStyle, styles.axisSolo]}>{left}</Text>;
   return (
     <View style={styles.axis}>
       <Text style={[styles.axisLeft, leftStyle]}>{left}</Text>

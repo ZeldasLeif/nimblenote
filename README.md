@@ -80,7 +80,7 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 | `+pw bankpin2 4321` | Fact without colon: the last token is the value if it looks like one (number, date, time, code with digits, email, phone). `pw` is an alias for `passwords`. | yes |
 | `+ movies the matrix` | Last token is not value-like → list items. | yes |
 | `+ keys sofa` | Where's-what: records "keys are at sofa" with a timestamp. Built-in items (keys, wallet, glasses, passport, phone, car, …) and any text starting with in/on/under/behind/… (`+ remote under the couch`) are locations. Force it with `+loc drill garage`. | yes |
-| `keys` · `where keys` | Latest location and how long ago. Opening it shows history and one-tap chips of your most frequent recent spots. | |
+| `keys` · `where keys` | "keys / Location: car · 1 h ago". Only the latest location is kept: a new one replaces it (undo brings the old one back). | |
 | `5+5` · `(2+3)*4` · `10 % 3` · `200*10%` | Calculator, evaluated live. `+ - * / %` (binary `%` = modulo, trailing `%` = percent), parentheses, `x` `×` `÷`. Enter replaces the input with the result. No `eval`. | |
 | `n called landlord` (or `r …`) | Timestamped note. | yes |
 | `n today` · `n yesterday` · `n last week` · `n this month` · `n monday` · `n last 3 days` · `n` | Notes in that range (weeks start Monday; "last week" = previous Mon–Sun). | |
@@ -95,13 +95,13 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 
 **Reading is forgiving, writing is strict.** Reads tolerate word order, filler words, plurals, possessives and partial last words. Writes never change your text, never merge words and never create a second category with the same name (`Groceries`, `grocery` and `groceries` are the same category).
 
-**Category type** (list, facts, location) is set by the first entry and can be switched in the hidden menu.
+**Category type** (list, facts, location) is set by the first entry.
 
 **Look.** "Calm paper": warm off-white (warm charcoal at night), a serif (Fraunces) for names and titles, soft shadows instead of borders, one clay accent for what Enter will do. Everything is centered; two-part rows meet at an invisible center line — the name right-aligned on the left, the amount, value or time left-aligned on the right ("flour │ 500g", "pin │ 4533").
 
-**Layout and gestures.** The app name stays at the top; the input sits directly on the keyboard, and answers appear just above it (centered card: bold name, one labelled line such as "Location: bathroom"). Every entry is its own command: after saving, the input is a normal command line again. Swipe a result card **left** to throw it off the screen (it is only hidden, nothing is deleted). Swipe **right** on the empty home screen for "Your lists" (all categories); swipe left or tap the title to come back. `l` opens it too.
+**Layout and gestures.** The app name stays at the top; the input sits directly on the keyboard. Exactly one thing is shown at a time, vertically centered: the live answer while you type, or the list/card after Enter. New input replaces it with a quick crossfade. Every entry is its own command: after saving, the input is a normal command line again. Swipe **left** on whatever is shown (a card, a list, a panel) to throw it off the screen; nothing is deleted. Swipe **right** on the empty home screen for "Your lists" (all categories). `l` opens it too.
 
-**Delete and edit.** Swipe an entry left, or long-press it for Edit / Copy / Delete. Every write and delete shows an Undo button; `undo` also works. Tap a category's title (or `⋯`) for the hidden menu: rename, change type, split on spaces, hide & encrypt, photo, delete.
+**Edit and delete.** Tap a title to rename it (only the displayed name changes; aliases keep working). Tap an item to edit it (`eggs:6` edits the amount; a hidden value is revealed first). Hold a title, an item or an answer card for a moment, then drag it onto the trash can that appears under ⚙ to delete it; you are asked first unless you turn that off in Settings → Deleting. Every write and delete shows an Undo button; `undo` also works. Hiding and encrypting a category, and splitting a list on spaces, are in Settings.
 
 **Aliases.** Built-in: `pw pwd pass password pin → passwords`, `bday birthday → birthdays`, `addr address → addresses`, `shopping shop grocery → groceries`, `todos to-do → todo`. Add or remove your own in Settings.
 
@@ -153,7 +153,7 @@ Everything else (SQLite, secure store, crypto, biometrics, location, camera, fil
 ## 6. Known limitations
 
 - **Not tested on a physical phone by the author of this prototype.** The type checker, 159 Jest tests (including a full simulated UI flow) and an Android production bundle (`npx expo export --platform android`) pass, but gestures, keyboard behaviour, permissions and notifications need a real-device pass.
-- Where's-what detection uses a fixed list of item names and prepositions. `+ drill garage` (no preposition, not a known item) becomes a list called "drill" containing "garage". Reading `drill` still shows "garage", and you can switch the type in the hidden menu or use `+loc`.
+- Where's-what detection uses a fixed list of item names and prepositions. `+ drill garage` (no preposition, not a known item) becomes a list called "drill" containing "garage". Reading `drill` still shows "garage"; use `+loc drill garage` to make it a location.
 - Live answers require high confidence: two-letter prefixes and ties between equally good matches show nothing until Enter. This is intentional (no flicker) but can feel conservative.
 - Writes are strict: no fuzzy matching of category names on write (a typo creates a new category; delete it with undo).
 - Timers live in notifications plus an in-app countdown; they can't be undone, but each has a × to cancel. Settings changes are not on the undo stack.

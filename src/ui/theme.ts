@@ -20,6 +20,8 @@ export interface Palette {
   shadow: string;
   /** Serif for names and titles; Android's built-in serif until Fraunces has loaded. */
   display: string;
+  /** System bar strips and window background: a deeper tone of the same paper. */
+  chrome: string;
 }
 
 // "Calm paper": warm off-white, ink-dark text, one clay-brown accent, shadows instead of borders.
@@ -41,6 +43,7 @@ export const LIGHT: Palette = {
   highlight: 'rgba(138, 90, 43, 0.14)',
   shadow: '0px 1px 2px rgba(60, 45, 20, 0.06), 0px 8px 24px rgba(60, 45, 20, 0.07)',
   display: 'serif',
+  chrome: '#E9DFCD',
 };
 
 // The same paper at night: warm charcoal, cream text, a lighter clay accent.
@@ -62,6 +65,7 @@ export const DARK: Palette = {
   highlight: 'rgba(217, 160, 102, 0.20)',
   shadow: '0px 1px 2px rgba(0, 0, 0, 0.30), 0px 8px 24px rgba(0, 0, 0, 0.28)',
   display: 'serif',
+  chrome: '#12110E',
 };
 
 export const DISPLAY_FONT = 'Fraunces_600SemiBold';

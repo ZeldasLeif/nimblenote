@@ -1,4 +1,4 @@
-// Turns a search document into what the answer cards display: a bold title and one labelled detail line.
+// Turns a search document into what the answer card displays: a title, then one or more smaller lines.
 
 import type { Doc } from '../core/match';
 import { store } from '../services/appStore';
@@ -6,7 +6,11 @@ import { fmtDateTime, relTime } from './format';
 
 export interface DocView {
   title: string;
-  detail: string;
+  /** Smaller lines under the title, each on its own line ("dad", "12.03.1960"). */
+  lines: string[];
+  /** What dropping the card on the trash deletes. */
+  kind: 'category' | 'entry' | 'note';
+  id: number;
   categoryId: number | null;
   noteId: number | null;
   photoUri: string | null;
@@ -21,7 +25,7 @@ export function viewDoc(doc: Doc): DocView | null {
   if (kind === 'n') {
     const n = store.getState().notes.find((x) => x.id === id);
     if (!n) return null;
-    return { title: n.text, detail: `Note · ${fmtDateTime(n.createdAt)}`, categoryId: null, noteId: n.id, photoUri: null, hidden: false };
+    return { title: n.text, lines: [`Note · ${fmtDateTime(n.createdAt)}`], kind: 'note', id: n.id, categoryId: null, noteId: n.id, photoUri: null, hidden: false };
   }
   if (kind === 'c') {
     const c = store.categoryById(id);
@@ -29,7 +33,7 @@ export function viewDoc(doc: Doc): DocView | null {
     const entries = store.entriesOf(c.id);
     let detail: string;
     if (c.type === 'place') {
-      const cur = store.placeHistory(c.id)[0];
+      const cur = store.currentPlace(c.id);
       detail = cur ? `Location: ${c.sensitive ? HIDDEN : cur.value} · ${relTime(cur.createdAt)}` : 'Location: not set yet';
     } else if (c.type === 'fact') {
       const only = entries.length === 1 ? entries[0] : null;
@@ -47,7 +51,7 @@ export function viewDoc(doc: Doc): DocView | null {
     }
     const parent = c.parentId !== null ? store.categoryById(c.parentId) : undefined;
     if (parent) detail = `${detail} · in ${parent.name}`;
-    return { title: c.name, detail, categoryId: c.id, noteId: null, photoUri: c.photoUri, hidden: c.sensitive };
+    return { title: c.name, lines: [detail], kind: 'category', id: c.id, categoryId: c.id, noteId: null, photoUri: c.photoUri, hidden: c.sensitive };
   }
   const e = store.entryById(id);
   if (!e) return null;
@@ -55,12 +59,14 @@ export function viewDoc(doc: Doc): DocView | null {
   if (!c) return null;
   const hidden = c.sensitive || e.sensitive || e.value === null;
   if (c.type === 'fact') {
+    // The category on top, then the name on its own line, then the value: birthdays / dad / 12.03.1960
+    const value = hidden ? `${HIDDEN} · tap to open` : e.value ?? '';
     return {
-      title: e.key ? `${c.name} · ${e.key}` : c.name,
-      detail: hidden ? `${HIDDEN} · tap to open` : e.value ?? '',
-      categoryId: c.id, noteId: null, photoUri: null, hidden,
+      title: c.name,
+      lines: e.key ? [e.key, value] : [value],
+      kind: 'entry', id: e.id, categoryId: c.id, noteId: null, photoUri: null, hidden,
     };
   }
   const amount = e.amount ? ` · ${e.amount}` : '';
-  return { title: hidden ? '•••' : e.value ?? '', detail: `In ${c.name}${amount}`, categoryId: c.id, noteId: null, photoUri: null, hidden };
+  return { title: hidden ? '•••' : e.value ?? '', lines: [`In ${c.name}${amount}`], kind: 'entry', id: e.id, categoryId: c.id, noteId: null, photoUri: null, hidden };
 }

@@ -1,4 +1,4 @@
-// Swipe a card left to throw it off the screen. Only hides it from view; nothing is deleted.
+// Swipe left anywhere on what is shown to throw it off the screen. Only hides it from view; nothing is deleted.
 
 import type { ReactNode } from 'react';
 import { useWindowDimensions } from 'react-native';
@@ -46,7 +46,7 @@ export function SwipeAway({ onDismiss, children, testID = 'swipe-away' }: { onDi
 
   return (
     <GestureDetector gesture={pan}>
-      <Animated.View style={style}>{children}</Animated.View>
+      <Animated.View style={[{ flex: 1 }, style]} collapsable={false}>{children}</Animated.View>
     </GestureDetector>
   );
 }
