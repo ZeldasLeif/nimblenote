@@ -8,7 +8,7 @@ import type { Entry } from '../data/store';
 import { store } from '../services/appStore';
 import { authenticate } from '../services/auth';
 import { relTime } from './format';
-import { Flash } from './kit';
+import { Axis, Flash } from './kit';
 import { useMotion } from './motion';
 import { RADIUS, SPACE, TOUCH, useTheme } from './theme';
 
@@ -84,6 +84,9 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
   };
 
   const shown = isSecret ? revealed ?? '••••••' : entry.value ?? '';
+  const hiddenStyle = isSecret && revealed === null ? { color: t.faint, letterSpacing: 2 } : null;
+  // Facts read "key | value"; locations "place | when"; list items "item | amount".
+  const kind: 'fact' | 'place' | 'list' = entry.key !== null ? 'fact' : showTime ? 'place' : 'list';
 
   return (
     <Animated.View entering={motion.item} exiting={motion.itemExit} layout={motion.layout}>
@@ -104,7 +107,7 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
             onLongPress={() => setMenu((m) => !m)}
             onPress={() => { if (isSecret && revealed === null) void reveal(); else if (menu) setMenu(false); }}
             delayLongPress={350}
-            style={[styles.row, { backgroundColor: t.bg, borderBottomColor: t.border }]}
+            style={[styles.row, { backgroundColor: t.surface, borderTopColor: t.border }]}
             accessibilityHint="Long press for edit and delete. Swipe left to delete."
           >
             {editing ? (
@@ -116,23 +119,25 @@ function EntryRowImpl({ entry, hidden, showTime, highlighted, onDelete, onMessag
                 onBlur={() => setEditing(false)}
                 autoCorrect={false}
                 autoCapitalize="none"
+                textAlign="center"
                 style={[styles.edit, { color: t.text, borderColor: t.accent }]}
               />
             ) : (
-              <View style={styles.rowInner}>
-                {entry.key ? <Text style={[styles.key, { color: t.muted }]} numberOfLines={1}>{entry.key}</Text> : null}
-                <Text style={[styles.value, { color: t.text }, isSecret && revealed === null && { color: t.faint, letterSpacing: 2 }]} selectable={!isSecret}>
-                  {shown}
-                </Text>
-                {entry.amount ? <Text style={[styles.amount, { color: t.muted }]}>{entry.amount}</Text> : null}
-                {showTime ? <Text style={[styles.time, { color: t.faint }]}>{relTime(entry.createdAt)}</Text> : null}
-              </View>
+              <Axis
+                left={kind === 'fact' ? entry.key : shown}
+                right={kind === 'fact' ? shown : kind === 'place' ? relTime(entry.createdAt) : entry.amount}
+                leftStyle={kind === 'fact' ? [styles.key, { color: t.muted }] : [styles.value, { color: t.text }, hiddenStyle]}
+                rightStyle={kind === 'fact'
+                  ? [styles.value, { color: t.text }, hiddenStyle]
+                  : kind === 'place' ? [styles.time, { color: t.faint }] : [styles.amount, { color: t.muted }]}
+                selectableRight={kind === 'fact' && !isSecret}
+              />
             )}
           </Pressable>
         </Flash>
       </Swipeable>
       {menu && !editing ? (
-        <Animated.View entering={motion.card} style={[styles.menu, { borderBottomColor: t.border }]}>
+        <Animated.View entering={motion.card} style={[styles.menu, { borderTopColor: t.border, backgroundColor: t.surface }]}>
           <MenuButton label="Edit" onPress={startEdit} />
           <MenuButton label="Copy" onPress={copy} />
           <MenuButton label="Delete" danger onPress={() => { setMenu(false); onDelete(entry.id); }} />
@@ -154,14 +159,13 @@ function MenuButton({ label, onPress, danger }: { label: string; onPress: () => 
 export const EntryRow = memo(EntryRowImpl);
 
 const styles = StyleSheet.create({
-  row: { minHeight: TOUCH + 4, paddingVertical: SPACE.m, paddingHorizontal: SPACE.l, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth },
-  rowInner: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap' },
-  key: { fontSize: 15, marginRight: SPACE.m, maxWidth: '45%' },
-  value: { fontSize: 17, flexShrink: 1 },
-  time: { fontSize: 13, marginLeft: 'auto', paddingLeft: SPACE.s },
-  amount: { fontSize: 16, marginLeft: 'auto', paddingLeft: SPACE.m, fontVariant: ['tabular-nums'], textAlign: 'right', minWidth: 56 },
+  row: { minHeight: TOUCH + 4, paddingVertical: SPACE.m, paddingHorizontal: SPACE.s, justifyContent: 'center', borderTopWidth: StyleSheet.hairlineWidth },
+  key: { fontSize: 16 },
+  value: { fontSize: 17 },
+  time: { fontSize: 14 },
+  amount: { fontSize: 16, fontVariant: ['tabular-nums'] },
   edit: { fontSize: 17, borderBottomWidth: 2, paddingVertical: 4 },
   swipeAction: { flex: 1, alignItems: 'flex-end', justifyContent: 'center', paddingHorizontal: SPACE.xl, borderRadius: RADIUS.s },
-  menu: { flexDirection: 'row', gap: SPACE.s, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderBottomWidth: StyleSheet.hairlineWidth },
+  menu: { flexDirection: 'row', justifyContent: 'center', gap: SPACE.s, paddingHorizontal: SPACE.l, paddingVertical: SPACE.s, borderTopWidth: StyleSheet.hairlineWidth },
   menuBtn: { minHeight: 40, paddingHorizontal: SPACE.l, borderRadius: RADIUS.s, justifyContent: 'center' },
 });

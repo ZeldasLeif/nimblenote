@@ -1,7 +1,7 @@
 // Small shared UI primitives with large touch targets.
 
 import { useEffect, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useMotion } from './motion';
 import { RADIUS, SPACE, TOUCH, useTheme } from './theme';
@@ -70,6 +70,29 @@ export function Button({ label, onPress, tone, disabled }: { label: string; onPr
   );
 }
 
+/**
+ * Two columns meeting at an invisible vertical center line: the left text is right-aligned against it,
+ * the right text left-aligned ("flour | 500g"). With no left text, the right text is simply centered.
+ */
+export function Axis({ left, right, leftStyle, rightStyle, selectableRight }: {
+  left: ReactNode;
+  right?: ReactNode;
+  leftStyle?: StyleProp<TextStyle>;
+  rightStyle?: StyleProp<TextStyle>;
+  selectableRight?: boolean;
+}) {
+  if (left === null || left === undefined || left === '') {
+    return <Text style={[styles.axisSolo, rightStyle]} selectable={selectableRight}>{right}</Text>;
+  }
+  return (
+    <View style={styles.axis}>
+      <Text style={[styles.axisLeft, leftStyle]}>{left}</Text>
+      <View style={styles.axisGap} />
+      <Text style={[styles.axisRight, rightStyle]} selectable={selectableRight}>{right ?? ''}</Text>
+    </View>
+  );
+}
+
 /** A brief background flash that confirms an item was just added or changed. Never blocks interaction. */
 export function Flash({ on, children, style }: { on: boolean; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const t = useTheme();
@@ -90,6 +113,11 @@ export function Flash({ on, children, style }: { on: boolean; children: ReactNod
 }
 
 const styles = StyleSheet.create({
+  axis: { flexDirection: 'row', alignItems: 'baseline' },
+  axisLeft: { flex: 1, textAlign: 'right' },
+  axisGap: { width: 18 },
+  axisRight: { flex: 1, textAlign: 'left' },
+  axisSolo: { textAlign: 'center' },
   chip: { minHeight: 40, paddingHorizontal: 14, borderRadius: 20, justifyContent: 'center', marginRight: SPACE.s, marginBottom: SPACE.s },
   chipText: { fontSize: 15 },
   segment: { flexDirection: 'row', borderRadius: RADIUS.m, padding: 3 },

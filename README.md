@@ -97,6 +97,8 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 
 **Category type** (list, facts, location) is set by the first entry and can be switched in the hidden menu.
 
+**Look.** "Calm paper": warm off-white (warm charcoal at night), a serif (Fraunces) for names and titles, soft shadows instead of borders, one clay accent for what Enter will do. Everything is centered; two-part rows meet at an invisible center line — the name right-aligned on the left, the amount, value or time left-aligned on the right ("flour │ 500g", "pin │ 4533").
+
 **Layout and gestures.** The app name stays at the top; the input sits directly on the keyboard, and answers appear just above it (centered card: bold name, one labelled line such as "Location: bathroom"). Every entry is its own command: after saving, the input is a normal command line again. Swipe a result card **left** to throw it off the screen (it is only hidden, nothing is deleted). Swipe **right** on the empty home screen for "Your lists" (all categories); swipe left or tap the title to come back. `l` opens it too.
 
 **Delete and edit.** Swipe an entry left, or long-press it for Edit / Copy / Delete. Every write and delete shows an Undo button; `undo` also works. Tap a category's title (or `⋯`) for the hidden menu: rename, change type, split on spaces, hide & encrypt, photo, delete.

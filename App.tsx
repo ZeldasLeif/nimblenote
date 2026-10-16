@@ -1,3 +1,5 @@
+import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, useColorScheme, View } from 'react-native';
@@ -9,14 +11,17 @@ import { forgetAuth } from './src/services/auth';
 import { Home } from './src/ui/Home';
 import { LockScreen } from './src/ui/LockScreen';
 import { makeMotion, MotionContext, useEffectiveMotion } from './src/ui/motion';
-import { DARK, LIGHT, ThemeContext } from './src/ui/theme';
+import { DARK, DISPLAY_FONT, LIGHT, ThemeContext } from './src/ui/theme';
 
 const RELOCK_AFTER_MS = 5 * 60 * 1000;
 
 export default function App() {
   const state = useAppState();
   const system = useColorScheme();
-  const palette = state.settings.theme === 'system' ? (system === 'dark' ? DARK : LIGHT) : state.settings.theme === 'dark' ? DARK : LIGHT;
+  const base = state.settings.theme === 'system' ? (system === 'dark' ? DARK : LIGHT) : state.settings.theme === 'dark' ? DARK : LIGHT;
+  // The serif loads from the app bundle in the background; nothing waits for it (system serif until then).
+  const [fontsLoaded] = useFonts({ [DISPLAY_FONT]: Fraunces_600SemiBold });
+  const palette = useMemo(() => (fontsLoaded ? { ...base, display: DISPLAY_FONT } : base), [base, fontsLoaded]);
   const motionMode = useEffectiveMotion(state.settings.animations);
   const motion = useMemo(() => makeMotion(motionMode), [motionMode]);
 

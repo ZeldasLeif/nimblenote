@@ -25,10 +25,10 @@ function AnswerCard({ s, onOpen, onDismiss }: { s: Scored; onOpen: (s: Scored) =
         onPress={() => onOpen(s)}
         accessibilityRole="button"
         accessibilityHint="Opens it. Swipe left to dismiss."
-        style={({ pressed }) => [styles.card, { backgroundColor: t.surface, borderColor: t.border, opacity: pressed ? 0.85 : 1 }]}
+        style={({ pressed }) => [styles.card, { backgroundColor: t.surface, boxShadow: t.shadow, opacity: pressed ? 0.85 : 1 }]}
       >
         {v.photoUri ? <Image source={{ uri: v.photoUri }} style={styles.cardPhoto} /> : null}
-        <Text style={[styles.cardTitle, { color: t.text }]} numberOfLines={2}>{v.title}</Text>
+        <Text style={[styles.cardTitle, { color: t.text, fontFamily: t.display }]} numberOfLines={2}>{v.title}</Text>
         <Text style={[styles.cardDetail, { color: t.muted }]} numberOfLines={3}>{v.detail}</Text>
       </Pressable>
     </SwipeAway>
@@ -70,7 +70,7 @@ export function NotesView({ notes, label, highlight, onMessage }: { notes: Note[
   useAppState();
   return (
     <View>
-      <Text style={[styles.panelTitle, { color: t.text }]}>Notes · {label}</Text>
+      <Text style={[styles.panelTitle, { color: t.text, fontFamily: t.display }]}>Notes · {label}</Text>
       {notes.length === 0 ? <Text style={[styles.empty, { color: t.muted }]}>No notes {label === 'recent' ? 'yet. Type “n called landlord”.' : label}.</Text> : null}
       {notes.map((n) => (
         <Animated.View key={n.id} entering={motion.item} exiting={motion.itemExit} layout={motion.layout}>
@@ -110,7 +110,7 @@ export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
   }
   return (
     <View style={styles.pad}>
-      <Text style={[styles.panelTitle, { color: t.text, textAlign: 'center', paddingHorizontal: 0 }]}>Your lists</Text>
+      <Text style={[styles.panelTitle, { color: t.text, fontFamily: t.display, paddingHorizontal: 0 }]}>Your lists</Text>
       {groups.map(([type, label]) => {
         const cats = byType(type);
         if (cats.length === 0) return null;
@@ -194,19 +194,19 @@ export function HelpView() {
 const styles = StyleSheet.create({
   peekSlot: { paddingHorizontal: SPACE.l, paddingBottom: SPACE.s },
   card: {
-    alignItems: 'center', minHeight: 72, borderRadius: RADIUS.l, borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center', minHeight: 72, borderRadius: 22,
     paddingHorizontal: SPACE.xl, paddingVertical: SPACE.l,
   },
   cardPhoto: { width: 64, height: 64, borderRadius: RADIUS.m, marginBottom: SPACE.s },
-  cardTitle: { fontSize: 21, fontWeight: '700', textAlign: 'center', letterSpacing: -0.2 },
+  cardTitle: { fontSize: 24, textAlign: 'center' },
   cardDetail: { fontSize: 15, marginTop: 4, textAlign: 'center', lineHeight: 20 },
   results: { paddingHorizontal: SPACE.l },
   resultGap: { marginTop: SPACE.s },
   empty: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.l, fontSize: 15 },
-  panelTitle: { fontSize: 22, fontWeight: '700', paddingHorizontal: SPACE.l, paddingTop: SPACE.m, paddingBottom: SPACE.s },
-  note: { paddingHorizontal: SPACE.l, paddingVertical: SPACE.m, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: TOUCH },
-  noteText: { fontSize: 17 },
-  noteTime: { fontSize: 13, marginTop: 4 },
+  panelTitle: { fontSize: 24, textAlign: 'center', paddingHorizontal: SPACE.l, paddingTop: SPACE.m, paddingBottom: SPACE.s },
+  note: { paddingHorizontal: SPACE.xl, paddingVertical: SPACE.m, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: TOUCH, alignItems: 'center' },
+  noteText: { fontSize: 17, textAlign: 'center' },
+  noteTime: { fontSize: 13, marginTop: 4, textAlign: 'center' },
   hint: { fontSize: 13, paddingHorizontal: SPACE.l, paddingVertical: SPACE.m },
   pad: { paddingHorizontal: SPACE.l, paddingBottom: SPACE.l },
   chips: { flexDirection: 'row', flexWrap: 'wrap' },

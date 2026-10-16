@@ -289,7 +289,7 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
     <View style={[styles.root, { backgroundColor: t.bg, paddingTop: insets.top + SPACE.m }]}>
       <View style={styles.titleRow}>
         <Pressable onPress={goHome} accessibilityRole="button" accessibilityLabel="NimbleNote, back to search" hitSlop={8}>
-          <Text style={[styles.title, { color: t.text }]}>NimbleNote</Text>
+          <Text style={[styles.title, { color: t.text, fontFamily: t.display }]}>NimbleNote</Text>
         </Pressable>
         <Pressable
           onPress={() => (view.kind === 'settings' ? goHome() : setView({ kind: 'settings' }))}
@@ -360,7 +360,7 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
             <Text
               style={[
                 styles.preview,
-                { color: preview.tone === 'warn' ? t.warn : preview.tone === 'calc' ? t.accent : preview.tone === 'neutral' ? t.muted : t.text },
+                { color: preview.tone === 'warn' ? t.warn : preview.tone === 'neutral' ? t.muted : t.accent },
                 preview.tone === 'calc' && styles.calc,
               ]}
               numberOfLines={2}
@@ -370,7 +370,7 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
           ) : null}
         </View>
 
-        <View style={[styles.inputBar, { backgroundColor: t.surface, borderColor: t.border }]}>
+        <View style={[styles.inputBar, { backgroundColor: t.surface, borderColor: t.border, boxShadow: t.shadow }]}>
           <TextInput
             ref={inputRef}
             value={text}
@@ -414,14 +414,14 @@ function HomeHint() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   titleRow: { alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.s, minHeight: 36 },
-  title: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, textAlign: 'center' },
+  title: { fontSize: 27, textAlign: 'center', letterSpacing: -0.3 },
   gear: { position: 'absolute', right: SPACE.l, width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1 },
   scroll: { flexGrow: 1, paddingBottom: SPACE.s },
   bottom: { justifyContent: 'flex-end' },
   inputBar: {
     flexDirection: 'row', alignItems: 'center', alignSelf: 'center', width: '92%', maxWidth: 560, minHeight: 56,
-    borderRadius: RADIUS.l, borderWidth: 1.5, paddingHorizontal: SPACE.m,
+    borderRadius: 18, borderWidth: 1.5, paddingHorizontal: SPACE.l,
   },
   input: { flex: 1, fontSize: 19, paddingVertical: SPACE.m },
   clear: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
