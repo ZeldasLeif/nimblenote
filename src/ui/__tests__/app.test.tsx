@@ -150,11 +150,19 @@ describe('App', () => {
     expect(appStore().categoryByKey('key')).toBeTruthy();
     await type('');
 
-    // Swipe right on the empty home screen: your lists; swipe left: gone again
+    // Swipe right on the empty home screen: "Your lists" opens as its own screen; swipe left: back
     await swipeRight('library-swipe');
     await waitFor(() => expect(screen.getByText('Your lists')).toBeTruthy());
-    await swipeLeft('stage-swipe');
+    expect(screen.getByText(/Shopping · /)).toBeTruthy();
+    await swipeLeft('library-back');
     await waitFor(() => expect(screen.queryByText('Your lists')).toBeNull());
+    // ... and tapping a list there opens it on the main screen
+    await swipeRight('library-swipe');
+    await waitFor(() => expect(screen.getByText('Your lists')).toBeTruthy());
+    await fireEvent.press(screen.getByText(/Shopping · /));
+    await waitFor(() => expect(screen.getByText('olive oil')).toBeTruthy());
+    expect(screen.queryByText('Your lists')).toBeNull();
+    await swipeLeft('stage-swipe');
 
     // A single fact: category on top, the name on its own line, then the value
     await type('+ birthdays dad: 12.03.1960');

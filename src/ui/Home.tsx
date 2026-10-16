@@ -2,7 +2,7 @@ import { type ComponentRef, type ReactNode, useCallback, useEffect, useMemo, use
 import { AppState, BackHandler, Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 // Gesture-handler's ScrollView coordinates with the swipe and drag gestures (no scrolling while dragging).
 import { Gesture, GestureDetector, ScrollView } from 'react-native-gesture-handler';
-import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
+import { KeyboardAvoidingView, useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatDuration } from '../core/duration';
@@ -26,7 +26,6 @@ import { type TrashTarget, useTrashHost } from './trash';
 
 type ViewState =
   | { kind: 'home' }
-  | { kind: 'library' }
   | { kind: 'card'; scored: Scored }
   | { kind: 'category'; id: number }
   | { kind: 'notes'; range: { start: number; end: number } | null; label: string }
@@ -52,14 +51,17 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
   const [peek, setPeek] = useState<Scored | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [highlight, setHighlight] = useState<ReadonlySet<number>>(new Set());
+  const [library, setLibrary] = useState(false);
   const dismissed = useRef<{ query: string; id: string } | null>(null);
   const busy = useRef(false);
 
-  // The input sits directly on the keyboard: bottom padding follows the keyboard height on the UI thread.
+  // The input sits directly on the keyboard. KeyboardAvoidingView pads only the real overlap with the
+  // keyboard (it measures where the screen ends, so it is right whether or not Android resizes the window);
+  // the navigation-bar gap below the input fades out as the keyboard comes up.
   const keyboard = useReanimatedKeyboardAnimation();
   const bottomInset = insets.bottom;
   const dockStyle = useAnimatedStyle(() => ({
-    paddingBottom: Math.max(-keyboard.height.value, bottomInset) + SPACE.s,
+    paddingBottom: bottomInset * (1 - keyboard.progress.value) + SPACE.s,
   }));
 
   const say = useCallback((message: string, undoable = false) => setToast({ id: Date.now(), message, undoable }), []);
@@ -138,6 +140,10 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (library) {
+        setLibrary(false);
+        return true;
+      }
       if (view.kind !== 'home' || text) {
         setText('');
         setView({ kind: 'home' });
@@ -146,7 +152,7 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
       return false;
     });
     return () => sub.remove();
-  }, [view.kind, text]);
+  }, [view.kind, text, library]);
 
   useEffect(() => {
     if (view.kind === 'category' && !store.categoryById(view.id)) setView({ kind: 'home' });
@@ -261,7 +267,7 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
       }
       case 'list-categories':
         setText('');
-        setView({ kind: 'library' });
+        openLibrary();
         return;
       case 'open-category': {
         const cat = store.categoryByKey(c.key);
@@ -295,7 +301,6 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
     }
   } else {
     switch (view.kind) {
-      case 'library': stage = { key: 'library', node: <CategoriesView onOpen={(id) => setView({ kind: 'category', id })} /> }; break;
       case 'card': stage = { key: `card:${view.scored.doc.id}`, node: <View style={styles.cardPad}><AnswerCard s={view.scored} onOpen={openScored} /></View> }; break;
       case 'category':
         if (category) {
@@ -322,7 +327,15 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
     }
   }, [text, peek, readKey]);
 
-  // Swipe right on the empty home screen: your lists.
+  // Swipe right on the empty home screen: "Your lists" slides in as its own screen.
+  const openLibrary = useCallback(() => {
+    Keyboard.dismiss();
+    setLibrary(true);
+  }, []);
+  const closeLibrary = useCallback(() => {
+    setLibrary(false);
+    setTimeout(focusInput, 50);
+  }, [focusInput]);
   const emptyHome = !stage && !typing;
   const librarySwipe = useMemo(() => Gesture.Pan()
     .withTestId('library-swipe')
@@ -330,13 +343,14 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
     .runOnJS(true)
     .activeOffsetX(24)
     .failOffsetY([-16, 16])
-    .onEnd((e) => { if (e.translationX > LIBRARY_SWIPE) setView({ kind: 'library' }); }), [emptyHome]);
+    .onEnd((e) => { if (e.translationX > LIBRARY_SWIPE) openLibrary(); }), [emptyHome, openLibrary]);
 
   return (
     <trash.Provider value={trash.api}>
       <View style={[styles.root, { backgroundColor: t.bg }]}>
         {/* System bar strips in a deeper paper tone. */}
         <View style={{ height: insets.top, backgroundColor: t.chrome }} />
+        <KeyboardAvoidingView behavior="padding" style={styles.column}>
         <View style={[styles.titleRow, { marginTop: SPACE.m }]}>
           <Pressable onPress={goHome} accessibilityRole="button" accessibilityLabel="NimbleNote, back to search" hitSlop={8}>
             <Text style={[styles.title, { color: t.text, fontFamily: t.display }]}>NimbleNote</Text>
@@ -431,11 +445,50 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
             ) : null}
           </View>
         </Animated.View>
+        </KeyboardAvoidingView>
 
         <View pointerEvents="none" style={[styles.bottomStrip, { height: insets.bottom, backgroundColor: t.chrome }]} />
+        {library ? (
+          <LibraryScreen
+            onClose={closeLibrary}
+            onOpen={(id) => { setLibrary(false); setText(''); setView({ kind: 'category', id }); setTimeout(focusInput, 50); }}
+          />
+        ) : null}
         {trash.overlay}
       </View>
     </trash.Provider>
+  );
+}
+
+/** "Your lists" as its own screen: slides in from the left, swipe left (or back) to return. */
+function LibraryScreen({ onClose, onOpen }: { onClose: () => void; onOpen: (id: number) => void }) {
+  const t = useTheme();
+  const motion = useMotion();
+  const insets = useSafeAreaInsets();
+  const back = useMemo(() => Gesture.Pan()
+    .withTestId('library-back')
+    .runOnJS(true)
+    .activeOffsetX(-24)
+    .failOffsetY([-16, 16])
+    .onEnd((e) => { if (e.translationX < -LIBRARY_SWIPE) onClose(); }), [onClose]);
+  return (
+    <Animated.View entering={motion.screenIn} exiting={motion.screenOut} style={[StyleSheet.absoluteFill, { backgroundColor: t.bg }]}>
+      <View style={{ height: insets.top, backgroundColor: t.chrome }} />
+      <GestureDetector gesture={back}>
+        <View style={styles.column} collapsable={false}>
+          <View style={[styles.titleRow, { marginTop: SPACE.m }]}>
+            <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Back" hitSlop={8} style={styles.back}>
+              <Text style={{ color: t.muted, fontSize: 26 }}>‹</Text>
+            </Pressable>
+            <Text style={[styles.title, { color: t.text, fontFamily: t.display }]}>Your lists</Text>
+          </View>
+          <ScrollView contentContainerStyle={[styles.scroll, styles.center, { paddingBottom: insets.bottom + SPACE.xl }]}>
+            <CategoriesView onOpen={onOpen} />
+          </ScrollView>
+        </View>
+      </GestureDetector>
+      <View pointerEvents="none" style={[styles.bottomStrip, { height: insets.bottom, backgroundColor: t.chrome }]} />
+    </Animated.View>
   );
 }
 
@@ -450,8 +503,10 @@ function HomeHint() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  column: { flex: 1 },
   titleRow: { alignItems: 'center', justifyContent: 'center', marginBottom: SPACE.s, minHeight: TITLE_ROW },
   title: { fontSize: 27, textAlign: 'center', letterSpacing: -0.3 },
+  back: { position: 'absolute', left: SPACE.l, width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   gear: { position: 'absolute', right: SPACE.l, width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
   stage: { flex: 1 },
   scroll: { flexGrow: 1, paddingVertical: SPACE.s },

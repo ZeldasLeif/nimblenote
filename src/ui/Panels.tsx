@@ -82,7 +82,6 @@ export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
   }
   return (
     <View style={styles.pad}>
-      <Text style={[styles.panelTitle, { color: t.text, fontFamily: t.display, paddingHorizontal: 0 }]}>Your lists</Text>
       {groups.map(([type, label]) => {
         const cats = byType(type);
         if (cats.length === 0) return null;
@@ -95,7 +94,7 @@ export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
           </View>
         );
       })}
-      <Text style={[styles.hint, { color: t.faint, textAlign: 'center' }]}>Swipe left or tap the title to go back.</Text>
+      <Text style={[styles.hint, { color: t.faint, textAlign: 'center' }]}>Swipe left to go back.</Text>
     </View>
   );
 }

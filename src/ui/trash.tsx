@@ -125,6 +125,9 @@ export function Draggable({ target, onTap, children, style, testID }: {
       const r = api.rect.value;
       return x >= r.x - HIT_SLOP && x <= r.x + r.w + HIT_SLOP && y >= r.y - HIT_SLOP && y <= r.y + r.h + HIT_SLOP;
     };
+    // Refs are only read on the JS thread: worklets just call these functions.
+    // (Touching a ref inside a worklet freezes it, and the next render's update then warns.)
+    const beginDrag = () => api.begin(targetRef.current.label);
     const fireDrop = () => api.drop(targetRef.current);
     const fireTap = () => onTapRef.current?.();
     const pan = Gesture.Pan()
@@ -134,7 +137,7 @@ export function Draggable({ target, onTap, children, style, testID }: {
         lifted.value = 1;
         api.gx.value = e.absoluteX;
         api.gy.value = e.absoluteY;
-        scheduleOnRN(api.begin, targetRef.current.label);
+        scheduleOnRN(beginDrag);
       })
       .onUpdate((e) => {
         api.gx.value = e.absoluteX;
