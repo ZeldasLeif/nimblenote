@@ -350,3 +350,40 @@ describe('amounts', () => {
     expect(write(parse('add to groceries eggs:6', catalog([['groceries', 'list']]))).payload).toEqual(L(['eggs', '6']));
   });
 });
+
+describe('sub-lists (one level)', () => {
+  it('recipes/pancakes creates a list inside another, both new', () => {
+    const c = write(parse('+ recipes/pancakes eggs:2, flour:500g, water:200ml', catalog()));
+    expect(c.category).toMatchObject({ key: 'pancake', name: 'pancakes', type: 'list', isNew: true, parent: { key: 'recipe', name: 'recipes', isNew: true } });
+    expect(c.payload).toEqual(L(['eggs', '2'], ['flour', '500g'], ['water', '200ml']));
+  });
+  it('the preview says where the list goes', () => {
+    const { describe: d } = require('../preview');
+    expect(d(parse('+ recipes/pancakes eggs:2', catalog())).text).toBe('↵ New list “pancakes” inside “recipes”: add 1 item “eggs” (2)');
+  });
+  it('an existing sub-list is reached by its own name', () => {
+    const cat = catalog([['recipes', 'list'], ['pancakes', 'list']]);
+    const c = write(parse('+ pancakes milk:200ml', cat));
+    expect(c.category).toMatchObject({ key: 'pancake', isNew: false });
+  });
+  it('an item of exactly one list becomes a sub-list: add receipt pancakes, then + pancakes eggs', () => {
+    const cat = { ...catalog([['receipt', 'list']]), items: new Map([['pancakes', ['receipt']]]) };
+    const c = write(parse('+ pancakes eggs:2, flour:500g', cat));
+    expect(c.category).toMatchObject({ name: 'pancakes', isNew: true, promote: true, parent: { key: 'receipt', isNew: false } });
+  });
+  it('no promotion when the item is in two lists or the write is a fact', () => {
+    const two = { ...catalog([['a', 'list'], ['b', 'list']]), items: new Map([['eggs', ['a', 'b']]]) };
+    expect(write(parse('+ eggs brown', two)).category.parent).toBeUndefined();
+    const one = { ...catalog([['groceries', 'list']]), items: new Map([['eggs', ['grocery']]]) };
+    const fact = write(parse('+ eggs 12', one));
+    expect(fact.category.type).toBe('fact');
+    expect(fact.category.parent).toBeUndefined();
+  });
+  it('only one level, and only lists hold lists', () => {
+    const cat = catalog([['bank', 'fact']]);
+    expect(parse('+ a/b/c x', catalog()).kind).toBe('invalid');
+    expect(parse('+ bank/cards visa', cat)).toMatchObject({ kind: 'invalid', message: expect.stringMatching(/only lists/) });
+    const nested = { ...catalog([['recipes', 'list']]), categories: new Map([['recipe', { key: 'recipe', name: 'recipes', type: 'list' as const, splitOnSpaces: false }], ['pancake', { key: 'pancake', name: 'pancakes', type: 'list' as const, splitOnSpaces: false, parentKey: 'recipe' }]]) };
+    expect(parse('+ pancakes/toppings syrup', nested)).toMatchObject({ kind: 'invalid', message: expect.stringMatching(/one level/) });
+  });
+});

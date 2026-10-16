@@ -5,6 +5,8 @@ export interface CatalogCategory {
   name: string; // display name as first typed
   type: CategoryType;
   splitOnSpaces: boolean;
+  /** Key of the parent list for a sub-list (one level of nesting), else null. */
+  parentKey?: string | null;
 }
 
 /** Read-only snapshot the pure parser needs to resolve names. */
@@ -12,11 +14,22 @@ export interface Catalog {
   categories: ReadonlyMap<string, CatalogCategory>;
   /** alias key (normalized with nameKey) -> target category display name */
   aliases: ReadonlyMap<string, string>;
+  /** Lowercased list item text -> keys of the top-level lists containing it (for turning an item into a sub-list). */
+  items?: ReadonlyMap<string, string[]>;
 }
 
 export type InputContext = { kind: 'none' } | { kind: 'category'; key: string };
 
-export type CategoryRef = { key: string; name: string; type: CategoryType; isNew: boolean };
+export type CategoryRef = {
+  key: string;
+  name: string;
+  type: CategoryType;
+  isNew: boolean;
+  /** For a new sub-list: the list it goes into (created too if new). */
+  parent?: { key: string; name: string; isNew: boolean } | null;
+  /** True when an existing item of the parent list with this name becomes the sub-list. */
+  promote?: boolean;
+};
 
 /** A list item; `amount` comes from "eggs:5" / "flour:1kg" and is shown in its own column. */
 export type ListItem = { text: string; amount: string | null };

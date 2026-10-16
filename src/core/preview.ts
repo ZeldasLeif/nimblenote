@@ -26,14 +26,15 @@ export function describe(cmd: Command): Preview | null {
       return { text: cmd.message, tone: 'warn' };
     case 'write': {
       const c = cmd.category;
-      const verb = c.isNew ? `New ${c.type} “${c.name}”` : c.name;
+      const where = c.parent ? ` inside “${c.parent.name}”` : '';
+      const verb = c.isNew ? `New ${c.type} “${c.name}”${where}` : c.name;
       const note = cmd.notes[0];
       switch (cmd.payload.type) {
         case 'list': {
           const items = cmd.payload.items;
           if (items.length === 0) {
             return c.isNew
-              ? { text: `↵ Create list “${c.name}”`, tone: 'write', note }
+              ? { text: `↵ Create list “${c.name}”${where}`, tone: 'write', note }
               : { text: `${c.name} already exists`, tone: 'neutral', note };
           }
           const n = items.length;

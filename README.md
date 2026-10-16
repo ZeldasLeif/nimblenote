@@ -74,6 +74,8 @@ The store tests use Node's built-in SQLite (`node:sqlite`, Node 22.5+). You will
 | `+ groceries eggs, milk, olive oil` | Write: adds 3 items. First write creates the list. Splits on commas, `;` and the word **and**, never on spaces ("olive oil" stays one item). Text is stored exactly as typed, no autocorrect. | yes |
 | `add …` / `new …` | Same as `+`. `add to groceries eggs` works too (a leading "to" is ignored), as does `add eggs to groceries` for existing lists. `new list groceries` creates the list, or, if it exists, adds to it with a one-line note. | yes |
 | `+groceries eggs:5, flour:1kg, water:200ml` | Amounts: `item:amount` stores the amount in its own column. Writing an item that is already on the list with a new amount updates it. In a brand-new category write it tight (`eggs:5`); `pin: 4533` with a space is a fact. | yes |
+| `+ recipes/pancakes eggs:2, flour:500g` | Sub-list: "pancakes" inside "recipes" (both created if new). Later just `+ pancakes milk:200ml`: names are unique, so the parent is never needed again. One level only. | yes |
+| `add receipt pancakes` then `+ pancakes eggs:2` | If the name is an item in exactly one list, that item becomes a sub-list (the preview says "New list pancakes inside receipt"). Not for facts: `+ eggs 12` stays a fact. | yes |
 | `+ bank pin: 4533` | Fact: a colon separates key (`pin`) and value (`4533`) in category `bank`. | yes |
 | `+pw bankpin2 4321` | Fact without colon: the last token is the value if it looks like one (number, date, time, code with digits, email, phone). `pw` is an alias for `passwords`. | yes |
 | `+ movies the matrix` | Last token is not value-like → list items. | yes |

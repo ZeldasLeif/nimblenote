@@ -36,11 +36,17 @@ export function viewDoc(doc: Doc): DocView | null {
       if (only && !c.sensitive && !only.sensitive) detail = only.key ? `${only.key}: ${only.value}` : only.value ?? '';
       else detail = `${entries.length} ${entries.length === 1 ? 'entry' : 'entries'}${c.sensitive ? ' · hidden' : ''}`;
     } else {
-      const names = entries.slice(0, 4).map((e) => (c.sensitive ? '•••' : e.value)).join(', ');
-      detail = entries.length
-        ? `List · ${entries.length} ${entries.length === 1 ? 'item' : 'items'}: ${names}${entries.length > 4 ? ', …' : ''}`
-        : 'List · empty';
+      const subs = store.childrenOf(c.id);
+      const names = [...subs.map((x) => x.name), ...entries.map((e) => (c.sensitive ? '•••' : e.value))].slice(0, 4).join(', ');
+      const count = [
+        subs.length ? `${subs.length} ${subs.length === 1 ? 'list' : 'lists'}` : '',
+        entries.length ? `${entries.length} ${entries.length === 1 ? 'item' : 'items'}` : '',
+      ].filter(Boolean).join(', ');
+      const total = subs.length + entries.length;
+      detail = total ? `List · ${count}: ${names}${total > 4 ? ', …' : ''}` : 'List · empty';
     }
+    const parent = c.parentId !== null ? store.categoryById(c.parentId) : undefined;
+    if (parent) detail = `${detail} · in ${parent.name}`;
     return { title: c.name, detail, categoryId: c.id, noteId: null, photoUri: c.photoUri, hidden: c.sensitive };
   }
   const e = store.entryById(id);

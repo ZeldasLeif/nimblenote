@@ -318,7 +318,14 @@ export function Home({ reduceMotion }: { reduceMotion: boolean }) {
             ) : null}
             {view.kind === 'results' ? <ResultsList results={view.results} onOpen={openScored} onDismiss={dismissResult} /> : null}
             {view.kind === 'category' && category ? (
-              <CategoryView key={category.id} category={category} highlight={highlight} onMessage={say} onClosed={goHome} />
+              <CategoryView
+                key={category.id}
+                category={category}
+                highlight={highlight}
+                onMessage={say}
+                onClosed={goHome}
+                onOpenCategory={(id) => setView({ kind: 'category', id })}
+              />
             ) : null}
             {view.kind === 'notes' ? (
               <NotesView notes={store.notesIn(view.range)} label={view.label} highlight={highlight} onMessage={say} />

@@ -11,6 +11,7 @@ export interface CategoryLite {
   type: CategoryType;
   sensitive: boolean;
   updatedAt: number;
+  parentId?: number | null;
 }
 export interface EntryLite {
   id: number;
@@ -72,9 +73,11 @@ export function buildDocs(
   }
   for (const { cat, tokens } of byId.values()) {
     const place = latestPlace.get(cat.id);
+    // A sub-list is also found through its parent's name ("recipes pancakes").
+    const parentTokens = cat.parentId != null ? byId.get(cat.parentId)?.tokens ?? [] : [];
     docs.push({
       id: `c:${cat.id}`, kind: 'category', categoryKey: cat.key,
-      strong: tokens, context: [],
+      strong: tokens, context: parentTokens,
       weak: place?.value && !cat.sensitive ? docTokens(place.value) : [],
       ts: place?.createdAt ?? cat.updatedAt,
     });

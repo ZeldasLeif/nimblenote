@@ -18,17 +18,20 @@ interface Props {
   highlight: ReadonlySet<number>;
   onMessage: (msg: string, undoable?: boolean) => void;
   onClosed: () => void;
+  onOpenCategory: (id: number) => void;
 }
 
 const TYPE_LABEL: Record<CategoryType, string> = { list: 'List', fact: 'Facts', place: 'Location' };
 
-export function CategoryView({ category: c, highlight, onMessage, onClosed }: Props) {
+export function CategoryView({ category: c, highlight, onMessage, onClosed, onOpenCategory }: Props) {
   const t = useTheme();
   const motion = useMotion();
   useAppState(); // re-render on store changes
   const [menu, setMenu] = useState(false);
   const [photoLarge, setPhotoLarge] = useState(false);
   const entries = c.type === 'place' ? store.placeHistory(c.id) : store.entriesOf(c.id);
+  const children = store.childrenOf(c.id);
+  const parent = c.parentId !== null ? store.categoryById(c.parentId) : undefined;
   const del = async (id: number) => onMessage((await store.deleteEntry(id)).message, true);
   const msg = (m: string) => onMessage(m);
 
@@ -39,6 +42,11 @@ export function CategoryView({ category: c, highlight, onMessage, onClosed }: Pr
 
   return (
     <Animated.View entering={motion.card}>
+      {parent ? (
+        <Pressable onPress={() => onOpenCategory(parent.id)} style={styles.crumb} accessibilityRole="button" accessibilityLabel={`Open ${parent.name}`} hitSlop={8}>
+          <Text style={{ color: t.muted, fontSize: 13 }}>in {parent.name}</Text>
+        </Pressable>
+      ) : null}
       <Pressable onLongPress={() => setMenu((m) => !m)} onPress={() => setMenu((m) => !m)} style={styles.header} accessibilityHint="Opens the menu to edit or organize">
         <Text style={[styles.title, { color: t.text }]} numberOfLines={1}>{c.name}</Text>
         <Text style={[styles.badge, { color: t.muted, backgroundColor: t.surfaceAlt }]}>
@@ -59,7 +67,23 @@ export function CategoryView({ category: c, highlight, onMessage, onClosed }: Pr
         <PlaceSummary category={c} onMove={moveTo} />
       ) : null}
 
-      {entries.length === 0 ? (
+      {children.length > 0 ? (
+        <View style={styles.subs}>
+          {children.map((ch) => (
+            <Pressable
+              key={ch.id}
+              onPress={() => onOpenCategory(ch.id)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.subRow, { backgroundColor: t.surface, borderColor: t.border, opacity: pressed ? 0.8 : 1 }]}
+            >
+              <Text style={{ color: t.text, fontSize: 17, fontWeight: '600' }} numberOfLines={1}>{ch.name}</Text>
+              <Text style={{ color: t.muted, fontSize: 14 }}>{store.entriesOf(ch.id).length} ›</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      {entries.length === 0 && children.length === 0 ? (
         <Text style={[styles.empty, { color: t.muted }]}>
           {c.type === 'list' ? `Empty. Add with “+ ${c.name} eggs:6, milk”.` : c.type === 'place' ? 'No location yet.' : `No entries yet. Add with “+ ${c.name} name: value”.`}
         </Text>
@@ -181,6 +205,12 @@ function CategoryMenu({ category: c, onMessage, onClosed, onDone }: { category: 
 const styles = StyleSheet.create({
   header: { alignItems: 'center', paddingHorizontal: SPACE.xl, paddingTop: SPACE.m, paddingBottom: SPACE.s, minHeight: 48 },
   title: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  crumb: { alignSelf: 'center', paddingTop: SPACE.s },
+  subs: { paddingHorizontal: SPACE.l, gap: SPACE.s, paddingBottom: SPACE.s },
+  subRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 52,
+    paddingHorizontal: SPACE.l, borderRadius: RADIUS.m, borderWidth: StyleSheet.hairlineWidth,
+  },
   badge: { fontSize: 12, marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden' },
   more: { position: 'absolute', right: SPACE.l, top: SPACE.m, fontSize: 22, paddingHorizontal: SPACE.s },
   photo: { marginHorizontal: SPACE.l, borderRadius: RADIUS.m, marginBottom: SPACE.m },

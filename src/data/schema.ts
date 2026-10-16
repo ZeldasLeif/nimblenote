@@ -1,6 +1,6 @@
 import type { DbAdapter } from './adapter';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const V1 = `
 CREATE TABLE IF NOT EXISTS categories (
@@ -67,5 +67,10 @@ export async function migrate(db: DbAdapter): Promise<void> {
     // v2: list item amounts ("eggs:5", "flour:1kg")
     await db.exec('ALTER TABLE entries ADD COLUMN amount TEXT');
     await db.exec('PRAGMA user_version = 2');
+  }
+  if (v < 3) {
+    // v3: sub-lists, one level ("recipes/pancakes")
+    await db.exec('ALTER TABLE categories ADD COLUMN parent_id INTEGER');
+    await db.exec('PRAGMA user_version = 3');
   }
 }

@@ -95,7 +95,15 @@ export function NotesView({ notes, label, highlight, onMessage }: { notes: Note[
 export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
   const t = useTheme();
   const s = useAppState();
-  const byType = (type: string) => s.categories.filter((c) => c.type === type).sort((a, b) => a.name.localeCompare(b.name));
+  // Sub-lists appear right after their parent as "parent › child".
+  const byType = (type: string) => s.categories
+    .filter((c) => c.type === type && c.parentId === null)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((c) => [c, ...store.childrenOf(c.id)]);
+  const chipLabel = (c: (typeof s.categories)[number]) => {
+    const parent = c.parentId !== null ? store.categoryById(c.parentId) : undefined;
+    return `${parent ? `${parent.name} › ` : ''}${c.name} · ${store.entriesOf(c.id).length}`;
+  };
   const groups: Array<[string, string]> = [['list', 'Lists'], ['fact', 'Facts'], ['place', 'Locations']];
   if (s.categories.length === 0) {
     return <Text style={[styles.empty, { color: t.muted }]}>Nothing yet. Try “+ groceries eggs, milk”.</Text>;
@@ -110,7 +118,7 @@ export function CategoriesView({ onOpen }: { onOpen: (id: number) => void }) {
           <View key={type}>
             <SectionTitle>{label}</SectionTitle>
             <View style={[styles.chips, { justifyContent: 'center' }]}>
-              {cats.map((c) => <Chip key={c.id} label={`${c.name} · ${store.entriesOf(c.id).length}`} onPress={() => onOpen(c.id)} />)}
+              {cats.map((c) => <Chip key={c.id} label={chipLabel(c)} onPress={() => onOpen(c.id)} />)}
             </View>
           </View>
         );
@@ -150,6 +158,7 @@ const HELP: Array<[string, string]> = [
   ["when is my dad's birthday?", 'Questions work: filler words are ignored'],
   ['+ groceries eggs, milk, olive oil', 'Add to a list (created on first use). Split on commas and “and”'],
   ['add to groceries eggs:6, flour:1kg', 'Amounts after a colon go in their own column'],
+  ['+ recipes/pancakes eggs:2, flour:500g', 'A list inside a list (one level). Later just “+ pancakes milk”'],
   ['+ bank pin: 4533', 'Save a fact: colon separates key and value'],
   ['+pw bankpin2 4321', 'Without colon the last word is the value if it looks like one'],
   ['+ keys sofa', 'Remember where something is (or “+loc drill garage”)'],

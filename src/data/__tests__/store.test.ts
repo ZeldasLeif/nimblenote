@@ -214,3 +214,55 @@ describe('Store amounts', () => {
     expect(store.getState().entries[0].amount).toBe('5');
   });
 });
+
+describe('Store sub-lists', () => {
+  it('creates parent and child, finds the child by name, undo removes both', async () => {
+    const { store } = await makeStore();
+    await run(store, '+ recipes/pancakes eggs:2, flour:500g');
+    const recipes = store.categoryByKey('recipe')!;
+    const pancakes = store.categoryByKey('pancake')!;
+    expect(pancakes.parentId).toBe(recipes.id);
+    expect(store.childrenOf(recipes.id).map((c) => c.name)).toEqual(['pancakes']);
+    await run(store, '+ pancakes milk:200ml');
+    expect(store.entriesOf(pancakes.id).map((e) => e.value)).toEqual(['eggs', 'flour', 'milk']);
+    await store.undo();
+    await store.undo();
+    expect(store.getState().categories).toHaveLength(0);
+  });
+
+  it('add receipt pancakes, then + pancakes eggs turns the item into a sub-list (undoable)', async () => {
+    const { store } = await makeStore();
+    await run(store, 'add receipt pancakes');
+    const receipt = store.categoryByKey('receipt')!;
+    expect(store.entriesOf(receipt.id).map((e) => e.value)).toEqual(['pancakes']);
+    await run(store, '+ pancakes eggs:2, flour:500g, water:200ml');
+    const pancakes = store.categoryByKey('pancake')!;
+    expect(pancakes.parentId).toBe(receipt.id);
+    expect(store.entriesOf(receipt.id)).toEqual([]); // the item became the sub-list
+    expect(store.entriesOf(pancakes.id).map((e) => [e.value, e.amount])).toEqual([['eggs', '2'], ['flour', '500g'], ['water', '200ml']]);
+    await store.undo();
+    expect(store.categoryByKey('pancake')).toBeUndefined();
+    expect(store.entriesOf(receipt.id).map((e) => e.value)).toEqual(['pancakes']);
+  });
+
+  it('deleting a parent deletes its sub-lists; undo restores all', async () => {
+    const { store } = await makeStore();
+    await run(store, '+ recipes/pancakes eggs');
+    await store.deleteCategory(store.categoryByKey('recipe')!.id);
+    expect(store.getState().categories).toHaveLength(0);
+    await store.undo();
+    expect(store.getState().categories.map((c) => c.name).sort()).toEqual(['pancakes', 'recipes']);
+  });
+
+  it('nesting survives export and import, and the child is found via the parent name', async () => {
+    const { store } = await makeStore();
+    await run(store, '+ recipes/pancakes eggs');
+    const file = JSON.parse(JSON.stringify(await store.exportAll()));
+    await store.deleteAll();
+    await store.importAll(file);
+    const recipes = store.categoryByKey('recipe')!;
+    expect(store.categoryByKey('pancake')!.parentId).toBe(recipes.id);
+    const { search, confidentBest } = require('../../core/match');
+    expect(confidentBest(search(store.docs(), ['recipe', 'pancake']))?.doc.id).toBe(`c:${store.categoryByKey('pancake')!.id}`);
+  });
+});

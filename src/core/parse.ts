@@ -129,12 +129,49 @@ export function parseFact(payload: string, existing: boolean): { key: string | n
   return null;
 }
 
-function categoryRef(name: string, catalog: Catalog, forced: CategoryType | null, payload: string): CategoryRef {
+function simpleRef(name: string, catalog: Catalog, forced: CategoryType | null, payload: string): CategoryRef {
   const key = resolveName(name, catalog);
   const existing = catalog.categories.get(key);
   if (existing) return { key, name: existing.name, type: existing.type, isNew: false };
   const display = catalog.aliases.get(nameKey(name)) ?? clean(name).replace(/:$/, '');
   return { key, name: display, type: forced ?? inferType(key, payload), isNew: true };
+}
+
+/**
+ * Resolves the target of a write. Sub-lists (one level):
+ *   "recipes/pancakes"  -> list "pancakes" inside "recipes" (both created if needed)
+ *   "pancakes"          -> if "pancakes" is an item in exactly one list, that item becomes a sub-list
+ * Sub-list names are unique like any category, so later writes never need the parent.
+ */
+export function categoryRef(name: string, catalog: Catalog, forced: CategoryType | null, payload: string): CategoryRef | { error: string } {
+  const slash = name.indexOf('/');
+  if (slash > 0 && slash < name.length - 1) {
+    const parentName = name.slice(0, slash);
+    const childName = name.slice(slash + 1);
+    if (childName.includes('/')) return { error: 'Lists nest one level: “parent/child”' };
+    const parentKey = resolveName(parentName, catalog);
+    const parent = catalog.categories.get(parentKey);
+    if (parent && parent.type !== 'list') return { error: `${parent.name} is a ${parent.type}; only lists can hold lists` };
+    if (parent?.parentKey) return { error: `${parent.name} is already inside a list; lists nest one level` };
+    const child = simpleRef(childName, catalog, forced ?? 'list', payload);
+    if (!child.isNew) return child; // names are unique: an existing list is used wherever it lives
+    if (child.key === parentKey) return { error: 'A list cannot contain itself' };
+    return {
+      ...child,
+      parent: { key: parentKey, name: parent?.name ?? catalog.aliases.get(nameKey(parentName)) ?? clean(parentName), isNew: !parent },
+    };
+  }
+  const ref = simpleRef(name, catalog, forced, payload);
+  if (ref.isNew && ref.type === 'list' && !forced) {
+    const owners = catalog.items?.get(clean(name).toLowerCase()) ?? [];
+    if (owners.length === 1) {
+      const parent = catalog.categories.get(owners[0]);
+      if (parent && !parent.parentKey) {
+        return { ...ref, parent: { key: parent.key, name: parent.name, isNew: false }, promote: true };
+      }
+    }
+  }
+  return ref;
 }
 
 function buildPayload(cat: CategoryRef, payload: string, catalog: Catalog): WritePayload | { error: string } {
@@ -185,6 +222,7 @@ function parseWrite(rest: string, catalog: Catalog, viaNew: boolean): Command {
   }
 
   const cat = categoryRef(name, catalog, forced, payload);
+  if ('error' in cat) return { kind: 'invalid', message: cat.error };
   const notes: string[] = [];
   if (!cat.isNew && forced && forced !== cat.type) notes.push(`${cat.name} is a ${cat.type}; adding as ${cat.type}`);
   if (!cat.isNew && viaNew) notes.push(`${cat.name} already exists, adding to it`);
@@ -262,8 +300,9 @@ export function parse(input: string, catalog: Catalog, context: InputContext = {
       break;
     case 'photo': case 'pic': {
       if (!rest) return { kind: 'invalid', message: 'Tag the photo, e.g. "photo keys"' };
-      const name = restTokens[0];
-      return { kind: 'photo', category: categoryRef(name, catalog, null, '') };
+      const ref = categoryRef(restTokens[0], catalog, null, '');
+      if ('error' in ref) return { kind: 'invalid', message: ref.error };
+      return { kind: 'photo', category: ref };
     }
     case 'settings': case 'options':
       if (!rest) return { kind: 'settings' };

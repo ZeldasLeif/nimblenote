@@ -145,6 +145,17 @@ describe('App', () => {
     await type('t tea');
     expect(screen.getByText(/Timer needs a duration/)).toBeTruthy();
 
+    // Sub-lists: create with a path, add later by name, open the parent from the breadcrumb
+    await type('+ recipes/pancakes eggs:2, flour:500g');
+    expect(screen.getByText('↵ New list “pancakes” inside “recipes”: add 2 items “eggs” (2), “flour” (500g)')).toBeTruthy();
+    await enter();
+    await waitFor(() => expect(screen.getByText('in recipes')).toBeTruthy());
+    await type('+ pancakes milk:200ml');
+    await enter();
+    await waitFor(() => expect(screen.getByText('200ml')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Open recipes'));
+    await waitFor(() => expect(screen.getByText('3 ›')).toBeTruthy());
+
     // Settings: theme switch persists
     await type('settings');
     await enter();

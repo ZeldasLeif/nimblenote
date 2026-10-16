@@ -26,6 +26,8 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface Category {
   id: number; key: string; name: string; type: CategoryType; splitOnSpaces: boolean; sensitive: boolean;
   photoUri: string | null; createdAt: number; updatedAt: number;
+  /** Parent list of a sub-list (one level), else null. */
+  parentId: number | null;
 }
 export interface Entry {
   id: number; categoryId: number; key: string | null;
@@ -64,12 +66,12 @@ type UndoStep = { label: string; run: () => Promise<void> };
 const PURGE_AFTER_MS = 24 * 3600 * 1000;
 const DEFAULT_SENSITIVE = new Set(['password']);
 
-interface CatRow { id: number; key: string; name: string; type: CategoryType; split_on_spaces: number; sensitive: number; photo_uri: string | null; created_at: number; updated_at: number }
+interface CatRow { id: number; key: string; name: string; type: CategoryType; split_on_spaces: number; sensitive: number; photo_uri: string | null; created_at: number; updated_at: number; parent_id: number | null }
 interface EntryRow { id: number; category_id: number; key: string | null; value: string | null; value_enc: string | null; amount: string | null; sensitive: number; position: number; created_at: number; updated_at: number }
 
 const toCat = (r: CatRow): Category => ({
   id: r.id, key: r.key, name: r.name, type: r.type, splitOnSpaces: !!r.split_on_spaces, sensitive: !!r.sensitive,
-  photoUri: r.photo_uri, createdAt: r.created_at, updatedAt: r.updated_at,
+  photoUri: r.photo_uri, createdAt: r.created_at, updatedAt: r.updated_at, parentId: r.parent_id ?? null,
 });
 const toEntry = (r: EntryRow): Entry => ({
   id: r.id, categoryId: r.category_id, key: r.key, value: r.value, secret: r.value_enc, amount: r.amount ?? null, sensitive: !!r.sensitive,
@@ -160,12 +162,26 @@ export class Store {
     if (this.derivedVersion === this.state.version) return;
     const s = this.state;
     const categories = new Map<string, CatalogCategory>();
-    for (const c of s.categories) categories.set(c.key, { key: c.key, name: c.name, type: c.type, splitOnSpaces: c.splitOnSpaces });
+    const byId = new Map(s.categories.map((c) => [c.id, c] as const));
+    for (const c of s.categories) {
+      const parentKey = c.parentId !== null ? byId.get(c.parentId)?.key ?? null : null;
+      categories.set(c.key, { key: c.key, name: c.name, type: c.type, splitOnSpaces: c.splitOnSpaces, parentKey });
+    }
     const aliases = new Map<string, string>();
     for (const a of s.aliases) aliases.set(a.alias, a.target);
-    this.catalogCache = { categories, aliases };
+    // Items of top-level lists, so "+ pancakes milk" can turn the item "pancakes" into a sub-list.
+    const items = new Map<string, string[]>();
+    for (const e of s.entries) {
+      const c = byId.get(e.categoryId);
+      if (!c || c.type !== 'list' || c.parentId !== null || c.sensitive || e.value === null) continue;
+      const k = clean(e.value).toLowerCase();
+      const owners = items.get(k) ?? [];
+      if (!owners.includes(c.key)) owners.push(c.key);
+      items.set(k, owners);
+    }
+    this.catalogCache = { categories, aliases, items };
     this.docsCache = buildDocs(
-      s.categories.map((c) => ({ id: c.id, key: c.key, name: c.name, type: c.type, sensitive: c.sensitive, updatedAt: c.updatedAt })),
+      s.categories.map((c) => ({ id: c.id, key: c.key, name: c.name, type: c.type, sensitive: c.sensitive, updatedAt: c.updatedAt, parentId: c.parentId })),
       s.entries.map((e) => ({ id: e.id, categoryId: e.categoryId, key: e.key, value: e.value, sensitive: e.sensitive, createdAt: e.createdAt })),
       s.notes,
       aliases,
@@ -181,6 +197,9 @@ export class Store {
   categoryById(id: number): Category | undefined { return this.state.categories.find((c) => c.id === id); }
   entryById(id: number): Entry | undefined { return this.state.entries.find((e) => e.id === id); }
   entriesOf(categoryId: number): Entry[] { return this.state.entries.filter((e) => e.categoryId === categoryId); }
+  childrenOf(categoryId: number): Category[] {
+    return this.state.categories.filter((c) => c.parentId === categoryId).sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   /** Place history, newest first. */
   placeHistory(categoryId: number): Entry[] {
@@ -239,12 +258,12 @@ export class Store {
     return { value: null, enc: await this.crypto.encrypt(value) };
   }
 
-  private async insertCategory(name: string, key: string, type: CategoryType): Promise<number> {
+  private async insertCategory(name: string, key: string, type: CategoryType, parentId: number | null = null): Promise<number> {
     const t = this.now();
     const sensitive = DEFAULT_SENSITIVE.has(key) ? 1 : 0;
     const r = await this.db.run(
-      'INSERT INTO categories (key, name, type, sensitive, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [key, name, type, sensitive, t, t],
+      'INSERT INTO categories (key, name, type, sensitive, created_at, updated_at, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [key, name, type, sensitive, t, t, parentId],
     );
     return r.lastInsertRowId;
   }
@@ -267,13 +286,29 @@ export class Store {
     const { category: ref, payload } = cmd;
     let cat = this.categoryByKey(ref.key);
     let createdCategoryId: number | null = null;
+    let createdParentId: number | null = null;
+    let promotedEntryId: number | null = null;
     const inserted: number[] = [];
     const updated: Array<{ id: number; value: string | null; enc: string | null; amount: string | null; updatedAt: number }> = [];
     let message = '';
 
     await this.db.transaction(async () => {
       if (!cat) {
-        createdCategoryId = await this.insertCategory(ref.name, ref.key, ref.type);
+        let parentId: number | null = null;
+        if (ref.parent) {
+          const parent = this.categoryByKey(ref.parent.key);
+          parentId = parent?.id ?? (createdParentId = await this.insertCategory(ref.parent.name, ref.parent.key, 'list'));
+          if (ref.promote && parent) {
+            // The item "pancakes" in the parent list becomes the sub-list "pancakes".
+            const item = this.entriesOf(parent.id).find((e) => sameText(e.value, ref.name));
+            if (item) {
+              promotedEntryId = item.id;
+              await this.db.run('UPDATE entries SET deleted_at = ? WHERE id = ?', [this.now(), item.id]);
+            }
+          }
+          await this.touchCategory(parentId);
+        }
+        createdCategoryId = await this.insertCategory(ref.name, ref.key, ref.type, parentId);
       }
       const catId = cat?.id ?? createdCategoryId!;
       const sensitive = cat?.sensitive ?? DEFAULT_SENSITIVE.has(ref.key);
@@ -338,6 +373,8 @@ export class Store {
             await this.db.run('UPDATE entries SET value = ?, value_enc = ?, amount = ?, updated_at = ? WHERE id = ?', [u.value, u.enc, u.amount, u.updatedAt, u.id]);
           }
           if (createdCategoryId !== null) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, createdCategoryId]);
+          if (createdParentId !== null) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, createdParentId]);
+          if (promotedEntryId !== null) await this.db.run('UPDATE entries SET deleted_at = NULL WHERE id = ?', [promotedEntryId]);
         });
       });
     }
@@ -384,11 +421,19 @@ export class Store {
   async deleteCategory(id: number): Promise<Outcome> {
     const c = this.categoryById(id);
     if (!c) return { message: 'Not found', undoable: false };
-    await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [this.now(), id]);
+    // Deleting a list also removes its sub-lists; undo brings them all back.
+    const family = [c, ...this.childrenOf(id)];
+    const t = this.now();
+    await this.db.transaction(async () => {
+      for (const x of family) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, x.id]);
+    });
     this.pushUndo(`Deleted ${c.name}`, async () => {
-      // Never create a duplicate: if the name was reused meanwhile, undo is refused.
-      if (this.categoryByKey(c.key)) throw new Error(`${c.name} exists again; delete it first to undo`);
-      await this.db.run('UPDATE categories SET deleted_at = NULL WHERE id = ?', [id]);
+      // Never create a duplicate: if a name was reused meanwhile, undo is refused.
+      const clash = family.find((x) => this.categoryByKey(x.key));
+      if (clash) throw new Error(`${clash.name} exists again; delete it first to undo`);
+      await this.db.transaction(async () => {
+        for (const x of family) await this.db.run('UPDATE categories SET deleted_at = NULL WHERE id = ?', [x.id]);
+      });
     });
     await this.reload();
     return { message: `Deleted ${c.name}`, undoable: true };
@@ -523,7 +568,8 @@ export class Store {
     for (const c of this.state.categories) {
       const entries = [];
       for (const e of this.entriesOf(c.id)) entries.push({ key: e.key, value: await this.reveal(e), amount: e.amount, createdAt: e.createdAt });
-      categories.push({ name: c.name, type: c.type, splitOnSpaces: c.splitOnSpaces, sensitive: c.sensitive, entries });
+      const parent = c.parentId !== null ? this.categoryById(c.parentId)?.name ?? null : null;
+      categories.push({ name: c.name, type: c.type, splitOnSpaces: c.splitOnSpaces, sensitive: c.sensitive, parent, entries });
     }
     return {
       app: 'NimbleNote', format: 1, exportedAt: new Date(this.now()).toISOString(),
@@ -562,6 +608,17 @@ export class Store {
           const id = await this.insertEntry(catId, e.key, e.value, sensitive, ++pos, e.amount);
           if (e.createdAt) await this.db.run('UPDATE entries SET created_at = ? WHERE id = ?', [e.createdAt, id]);
           insertedEntries.push(id);
+        }
+      }
+      // Link sub-lists to their parents (by name) once every category exists.
+      const ids = new Map<string, number>();
+      for (const r of await this.db.all<{ id: number; key: string }>('SELECT id, key FROM categories WHERE deleted_at IS NULL')) ids.set(r.key, r.id);
+      for (const c of file.categories) {
+        if (!c.parent) continue;
+        const childId = ids.get(nameKey(c.name));
+        const parentId = ids.get(nameKey(c.parent));
+        if (childId && parentId && childId !== parentId && createdCats.includes(childId)) {
+          await this.db.run('UPDATE categories SET parent_id = ? WHERE id = ?', [parentId, childId]);
         }
       }
       for (const n of file.notes) {
@@ -613,7 +670,7 @@ export interface ExportFile {
   app: 'NimbleNote';
   format: 1;
   exportedAt: string;
-  categories: Array<{ name: string; type: CategoryType; splitOnSpaces: boolean; sensitive: boolean; entries: Array<{ key: string | null; value: string; amount: string | null; createdAt: number }> }>;
+  categories: Array<{ name: string; type: CategoryType; splitOnSpaces: boolean; sensitive: boolean; parent: string | null; entries: Array<{ key: string | null; value: string; amount: string | null; createdAt: number }> }>;
   notes: Array<{ text: string; createdAt: number }>;
   aliases: Array<{ alias: string; target: string }>;
   settings: Settings;
@@ -628,6 +685,7 @@ function parseExport(data: unknown): ExportFile | null {
     .filter((c) => c && typeof c.name === 'string' && types.has(c.type) && Array.isArray(c.entries))
     .map((c) => ({
       name: c.name, type: c.type, splitOnSpaces: !!c.splitOnSpaces, sensitive: !!c.sensitive,
+      parent: typeof c.parent === 'string' ? c.parent : null,
       entries: c.entries
         .filter((e) => e && typeof e.value === 'string')
         .map((e) => ({ key: typeof e.key === 'string' ? e.key : null, value: e.value, amount: typeof e.amount === 'string' ? e.amount : null, createdAt: Number(e.createdAt) || 0 })),
