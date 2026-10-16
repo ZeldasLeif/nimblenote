@@ -11,7 +11,7 @@ import { evaluate, isCalcLike } from './calc';
 import { parseDateRange } from './dates';
 import { findClock, findDuration, nextClockTime } from './duration';
 import { clean, nameKey, queryTokens } from './normalize';
-import type { Catalog, CategoryRef, CategoryType, Command, InputContext, WritePayload } from './types';
+import type { Catalog, CategoryRef, CategoryType, Command, InputContext, ListItem, WritePayload } from './types';
 import { looksLikeValue, trailingWordDate } from './valueDetect';
 
 /** Single letters and words with built-in meaning. User categories with these names get a warning. */
@@ -51,10 +51,36 @@ export function splitItems(text: string, onSpaces = false): string[] {
   return parts.flatMap((p) => p.split(/\s+/)).filter(Boolean);
 }
 
+// An amount is digit-led with an optional short unit: 5, 2x, 1kg, 500 g, 1.5l, 1/2, 200ml.
+const QTY = String.raw`\d[\d.,/]*\s?[\p{L}%]{0,8}\.?`;
+const AMOUNT_TIGHT = new RegExp(String.raw`^(.*\S):(${QTY})$`, 'u');
+const AMOUNT_SPACED = new RegExp(String.raw`^(.*\S)\s*:\s*(${QTY})$`, 'u');
+
+/**
+ * Splits "eggs:5" into item and amount. In a brand-new category only the tight form counts
+ * ("eggs:5"), so "+ bank pin: 4533" (colon + space) still creates a fact.
+ */
+export function parseAmount(item: string, allowSpaced = true): ListItem {
+  const m = (allowSpaced ? AMOUNT_SPACED : AMOUNT_TIGHT).exec(item);
+  if (m && !/:/.test(m[1])) return { text: clean(m[1]), amount: m[2].trim() };
+  return { text: item, amount: null };
+}
+
+/** Parse list text into items with optional amounts. */
+export function listItems(text: string, onSpaces = false): ListItem[] {
+  return splitItems(text, onSpaces).map((i) => parseAmount(i));
+}
+
+/** True when every colon in the text is an item amount written tightly ("eggs:2, flour:500g"). */
+function onlyTightAmounts(p: string): boolean {
+  const items = splitItems(p);
+  return items.some((i) => i.includes(':')) && items.every((i) => !i.includes(':') || parseAmount(i, false).amount !== null);
+}
+
 /** Decide the type of a brand-new category from its first entry. */
 export function inferType(key: string, payload: string): CategoryType {
   const p = payload.trim();
-  if (separatorColon(p) >= 0) return 'fact';
+  if (separatorColon(p) >= 0) return onlyTightAmounts(p) ? 'list' : 'fact';
   const hasSeparators = /[,;]|\s+and\s+/i.test(p);
   if (PLACE_ITEMS.has(key) && !hasSeparators && p) return 'place';
   if (PLACE_PREPOSITION.test(p) && !hasSeparators) return 'place';
@@ -115,7 +141,7 @@ function buildPayload(cat: CategoryRef, payload: string, catalog: Catalog): Writ
   const splitSpaces = catalog.categories.get(cat.key)?.splitOnSpaces ?? false;
   switch (cat.type) {
     case 'list':
-      return { type: 'list', items: splitItems(payload, splitSpaces) };
+      return { type: 'list', items: listItems(payload, splitSpaces) };
     case 'place': {
       const location = clean(payload);
       if (!location) return { error: `Where is ${cat.name}?` };
@@ -134,11 +160,15 @@ function parseWrite(rest: string, catalog: Catalog, viaNew: boolean): Command {
   let text = rest.trim();
   if (!text) return { kind: 'invalid', message: 'Type a name, e.g. "+ groceries eggs, milk"' };
 
+  // "add to groceries eggs": a leading "to" is just English, the next word is the target.
+  const stripTo = (t: string) => (/^to\s+\S/i.test(t) ? t.replace(/^to\s+/i, '') : t);
+  text = stripTo(text);
+
   let forced: CategoryType | null = null;
   const kw = /^(\S+)\s+(\S.*)$/.exec(text);
   if (kw && TYPE_KEYWORDS[kw[1].toLowerCase()]) {
     forced = TYPE_KEYWORDS[kw[1].toLowerCase()];
-    text = kw[2];
+    text = stripTo(kw[2]);
   }
 
   // "add eggs to groceries" — only when the target already exists, so it is never ambiguous.

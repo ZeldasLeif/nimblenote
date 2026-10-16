@@ -32,6 +32,8 @@ export interface Entry {
   /** Plain value; null when the value is encrypted (see `secret`). */
   value: string | null;
   secret: string | null;
+  /** Optional quantity for list items ("5", "1kg"). */
+  amount: string | null;
   sensitive: boolean; position: number; createdAt: number; updatedAt: number;
 }
 export interface Note { id: number; text: string; createdAt: number }
@@ -63,14 +65,14 @@ const PURGE_AFTER_MS = 24 * 3600 * 1000;
 const DEFAULT_SENSITIVE = new Set(['password']);
 
 interface CatRow { id: number; key: string; name: string; type: CategoryType; split_on_spaces: number; sensitive: number; photo_uri: string | null; created_at: number; updated_at: number }
-interface EntryRow { id: number; category_id: number; key: string | null; value: string | null; value_enc: string | null; sensitive: number; position: number; created_at: number; updated_at: number }
+interface EntryRow { id: number; category_id: number; key: string | null; value: string | null; value_enc: string | null; amount: string | null; sensitive: number; position: number; created_at: number; updated_at: number }
 
 const toCat = (r: CatRow): Category => ({
   id: r.id, key: r.key, name: r.name, type: r.type, splitOnSpaces: !!r.split_on_spaces, sensitive: !!r.sensitive,
   photoUri: r.photo_uri, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 const toEntry = (r: EntryRow): Entry => ({
-  id: r.id, categoryId: r.category_id, key: r.key, value: r.value, secret: r.value_enc, sensitive: !!r.sensitive,
+  id: r.id, categoryId: r.category_id, key: r.key, value: r.value, secret: r.value_enc, amount: r.amount ?? null, sensitive: !!r.sensitive,
   position: r.position, createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
@@ -247,12 +249,12 @@ export class Store {
     return r.lastInsertRowId;
   }
 
-  private async insertEntry(categoryId: number, key: string | null, value: string, sensitive: boolean, position: number): Promise<number> {
+  private async insertEntry(categoryId: number, key: string | null, value: string, sensitive: boolean, position: number, amount: string | null = null): Promise<number> {
     const t = this.now();
     const sealed = await this.sealValue(value, sensitive);
     const r = await this.db.run(
-      'INSERT INTO entries (category_id, key, value, value_enc, sensitive, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [categoryId, key, sealed.value, sealed.enc, sensitive ? 1 : 0, position, t, t],
+      'INSERT INTO entries (category_id, key, value, value_enc, amount, sensitive, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [categoryId, key, sealed.value, sealed.enc, amount, sensitive ? 1 : 0, position, t, t],
     );
     return r.lastInsertRowId;
   }
@@ -266,7 +268,7 @@ export class Store {
     let cat = this.categoryByKey(ref.key);
     let createdCategoryId: number | null = null;
     const inserted: number[] = [];
-    const updated: Array<{ id: number; value: string | null; enc: string | null; updatedAt: number }> = [];
+    const updated: Array<{ id: number; value: string | null; enc: string | null; amount: string | null; updatedAt: number }> = [];
     let message = '';
 
     await this.db.transaction(async () => {
@@ -281,24 +283,38 @@ export class Store {
         const items = payload.items;
         let pos = existing.reduce((m, e) => Math.max(m, e.position), 0);
         const skipped: string[] = [];
-        for (const item of items) {
-          if (existing.some((e) => sameText(e.value, item)) || items.indexOf(item) !== items.findIndex((x) => sameText(x, item))) {
-            skipped.push(item);
+        const amounted: string[] = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (items.findIndex((x) => sameText(x.text, item.text)) !== i) { skipped.push(item.text); continue; }
+          const same = existing.find((e) => sameText(e.value, item.text));
+          if (same) {
+            // Already on the list: a new amount updates it, otherwise nothing to do.
+            if (item.amount !== null && item.amount !== same.amount) {
+              updated.push({ id: same.id, value: same.value, enc: same.secret, amount: same.amount, updatedAt: same.updatedAt });
+              await this.db.run('UPDATE entries SET amount = ?, updated_at = ? WHERE id = ?', [item.amount, this.now(), same.id]);
+              amounted.push(`${item.text} ${item.amount}`);
+            } else {
+              skipped.push(item.text);
+            }
             continue;
           }
-          inserted.push(await this.insertEntry(catId, null, item, sensitive, ++pos));
+          inserted.push(await this.insertEntry(catId, null, item.text, sensitive, ++pos, item.amount));
         }
         const added = inserted.length;
-        message = createdCategoryId && added === 0
-          ? `Created list ${ref.name}`
-          : `Added ${added} to ${ref.name}${skipped.length ? ` · already there: ${skipped.join(', ')}` : ''}`;
+        const parts = [
+          createdCategoryId && added === 0 && amounted.length === 0 ? `Created list ${ref.name}` : `Added ${added} to ${ref.name}`,
+          amounted.length ? `updated ${amounted.join(', ')}` : '',
+          skipped.length ? `already there: ${skipped.join(', ')}` : '',
+        ];
+        message = parts.filter(Boolean).join(' · ');
       } else if (payload.type === 'place') {
         inserted.push(await this.insertEntry(catId, null, payload.location, sensitive, 0));
         message = `${ref.name} → ${payload.location}`;
       } else {
         const match = existing.find((e) => sameText(e.key, payload.key));
         if (match) {
-          updated.push({ id: match.id, value: match.value, enc: match.secret, updatedAt: match.updatedAt });
+          updated.push({ id: match.id, value: match.value, enc: match.secret, amount: match.amount, updatedAt: match.updatedAt });
           const sealed = await this.sealValue(payload.value, sensitive || match.sensitive);
           await this.db.run('UPDATE entries SET value = ?, value_enc = ?, updated_at = ? WHERE id = ?', [sealed.value, sealed.enc, this.now(), match.id]);
           message = `Updated ${ref.name}${payload.key ? ` ${payload.key}` : ''}`;
@@ -319,7 +335,7 @@ export class Store {
         await this.db.transaction(async () => {
           for (const id of inserted) await this.db.run('UPDATE entries SET deleted_at = ? WHERE id = ?', [t, id]);
           for (const u of updated) {
-            await this.db.run('UPDATE entries SET value = ?, value_enc = ?, updated_at = ? WHERE id = ?', [u.value, u.enc, u.updatedAt, u.id]);
+            await this.db.run('UPDATE entries SET value = ?, value_enc = ?, amount = ?, updated_at = ? WHERE id = ?', [u.value, u.enc, u.amount, u.updatedAt, u.id]);
           }
           if (createdCategoryId !== null) await this.db.run('UPDATE categories SET deleted_at = ? WHERE id = ?', [t, createdCategoryId]);
         });
@@ -378,12 +394,13 @@ export class Store {
     return { message: `Deleted ${c.name}`, undoable: true };
   }
 
-  async updateEntry(id: number, patch: { key?: string | null; value?: string }): Promise<Outcome> {
+  async updateEntry(id: number, patch: { key?: string | null; value?: string; amount?: string | null }): Promise<Outcome> {
     const e = this.entryById(id);
     if (!e) return { message: 'Not found', undoable: false };
     const cat = this.categoryById(e.categoryId);
-    const before = { key: e.key, value: e.value, enc: e.secret, updatedAt: e.updatedAt };
+    const before = { key: e.key, value: e.value, enc: e.secret, amount: e.amount, updatedAt: e.updatedAt };
     const nextKey = patch.key !== undefined ? patch.key : e.key;
+    const nextAmount = patch.amount !== undefined ? patch.amount : e.amount;
     let value = e.value;
     let enc = e.secret;
     if (patch.value !== undefined) {
@@ -391,9 +408,9 @@ export class Store {
       value = sealed.value;
       enc = sealed.enc;
     }
-    await this.db.run('UPDATE entries SET key = ?, value = ?, value_enc = ?, updated_at = ? WHERE id = ?', [nextKey, value, enc, this.now(), id]);
+    await this.db.run('UPDATE entries SET key = ?, value = ?, value_enc = ?, amount = ?, updated_at = ? WHERE id = ?', [nextKey, value, enc, nextAmount, this.now(), id]);
     this.pushUndo('Edited', async () => {
-      await this.db.run('UPDATE entries SET key = ?, value = ?, value_enc = ?, updated_at = ? WHERE id = ?', [before.key, before.value, before.enc, before.updatedAt, id]);
+      await this.db.run('UPDATE entries SET key = ?, value = ?, value_enc = ?, amount = ?, updated_at = ? WHERE id = ?', [before.key, before.value, before.enc, before.amount, before.updatedAt, id]);
     });
     await this.reload();
     return { message: 'Saved', highlight: [id], undoable: true };
@@ -505,7 +522,7 @@ export class Store {
     const categories: ExportFile['categories'] = [];
     for (const c of this.state.categories) {
       const entries = [];
-      for (const e of this.entriesOf(c.id)) entries.push({ key: e.key, value: await this.reveal(e), createdAt: e.createdAt });
+      for (const e of this.entriesOf(c.id)) entries.push({ key: e.key, value: await this.reveal(e), amount: e.amount, createdAt: e.createdAt });
       categories.push({ name: c.name, type: c.type, splitOnSpaces: c.splitOnSpaces, sensitive: c.sensitive, entries });
     }
     return {
@@ -542,7 +559,7 @@ export class Store {
         let pos = existing.reduce((m, e) => Math.max(m, e.position), 0);
         for (const e of c.entries) {
           if (existingPlain.some((x) => sameText(x.key, e.key) && sameText(x.value, e.value))) continue;
-          const id = await this.insertEntry(catId, e.key, e.value, sensitive, ++pos);
+          const id = await this.insertEntry(catId, e.key, e.value, sensitive, ++pos, e.amount);
           if (e.createdAt) await this.db.run('UPDATE entries SET created_at = ? WHERE id = ?', [e.createdAt, id]);
           insertedEntries.push(id);
         }
@@ -596,7 +613,7 @@ export interface ExportFile {
   app: 'NimbleNote';
   format: 1;
   exportedAt: string;
-  categories: Array<{ name: string; type: CategoryType; splitOnSpaces: boolean; sensitive: boolean; entries: Array<{ key: string | null; value: string; createdAt: number }> }>;
+  categories: Array<{ name: string; type: CategoryType; splitOnSpaces: boolean; sensitive: boolean; entries: Array<{ key: string | null; value: string; amount: string | null; createdAt: number }> }>;
   notes: Array<{ text: string; createdAt: number }>;
   aliases: Array<{ alias: string; target: string }>;
   settings: Settings;
@@ -613,7 +630,7 @@ function parseExport(data: unknown): ExportFile | null {
       name: c.name, type: c.type, splitOnSpaces: !!c.splitOnSpaces, sensitive: !!c.sensitive,
       entries: c.entries
         .filter((e) => e && typeof e.value === 'string')
-        .map((e) => ({ key: typeof e.key === 'string' ? e.key : null, value: e.value, createdAt: Number(e.createdAt) || 0 })),
+        .map((e) => ({ key: typeof e.key === 'string' ? e.key : null, value: e.value, amount: typeof e.amount === 'string' ? e.amount : null, createdAt: Number(e.createdAt) || 0 })),
     }));
   const notes = (Array.isArray(d.notes) ? d.notes : [])
     .filter((n) => n && typeof n.text === 'string')

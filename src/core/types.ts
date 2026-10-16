@@ -18,8 +18,11 @@ export type InputContext = { kind: 'none' } | { kind: 'category'; key: string };
 
 export type CategoryRef = { key: string; name: string; type: CategoryType; isNew: boolean };
 
+/** A list item; `amount` comes from "eggs:5" / "flour:1kg" and is shown in its own column. */
+export type ListItem = { text: string; amount: string | null };
+
 export type WritePayload =
-  | { type: 'list'; items: string[] }
+  | { type: 'list'; items: ListItem[] }
   | { type: 'fact'; key: string | null; value: string }
   | { type: 'place'; location: string };
 

@@ -2,6 +2,12 @@ import { needsEnter, parse, parseFact, splitItems } from '../parse';
 import type { Command } from '../types';
 import { catalog } from './helpers';
 
+/** Expected list payload: plain items have no amount; pass [text, amount] for items with one. */
+const L = (...items: Array<string | [string, string]>) => ({
+  type: 'list',
+  items: items.map((i) => (Array.isArray(i) ? { text: i[0], amount: i[1] } : { text: i, amount: null })),
+});
+
 const NOW = new Date(2026, 9, 15, 10, 0, 0); // Thu 15 Oct 2026, 10:00 local
 
 function write(cmd: Command) {
@@ -22,7 +28,7 @@ describe('write prefixes', () => {
     (input) => {
       const c = write(parse(input, catalog()));
       expect(c.category.key).toBe('grocery');
-      expect(c.payload).toEqual({ type: 'list', items: ['eggs'] });
+      expect(c.payload).toEqual(L('eggs'));
     },
   );
 
@@ -46,17 +52,17 @@ describe('lists', () => {
     const c = write(parse('+ groceries eggs, milk, olive oil', catalog()));
     expect(c.category.isNew).toBe(true);
     expect(c.category.type).toBe('list');
-    expect(c.payload).toEqual({ type: 'list', items: ['eggs', 'milk', 'olive oil'] });
+    expect(c.payload).toEqual(L('eggs', 'milk', 'olive oil'));
   });
 
   it('splits on the word "and"', () => {
     const c = write(parse('+ groceries eggs and milk and olive oil', catalog()));
-    expect(c.payload).toEqual({ type: 'list', items: ['eggs', 'milk', 'olive oil'] });
+    expect(c.payload).toEqual(L('eggs', 'milk', 'olive oil'));
   });
 
   it('keeps "toilet paper" exactly as typed (no autocorrect, no merging)', () => {
     const c = write(parse('+ groceries toilet paper, Olive  Oil', catalog([['groceries', 'list']])));
-    expect(c.payload).toEqual({ type: 'list', items: ['toilet paper', 'Olive Oil'] });
+    expect(c.payload).toEqual(L('toilet paper', 'Olive Oil'));
   });
 
   it('does not split on "and" inside words', () => {
@@ -65,7 +71,7 @@ describe('lists', () => {
 
   it('splits on spaces when the list opts in', () => {
     const c = write(parse('+ groceries eggs milk, olive oil', catalog([['groceries', 'list', { splitOnSpaces: true }]])));
-    expect(c.payload).toEqual({ type: 'list', items: ['eggs', 'milk', 'olive', 'oil'] });
+    expect(c.payload).toEqual(L('eggs', 'milk', 'olive', 'oil'));
   });
 
   it('adds to an existing list instead of creating a duplicate', () => {
@@ -85,25 +91,25 @@ describe('lists', () => {
     const cat = catalog([['groceries', 'list']]);
     const c = write(parse('new list groceries butter', cat));
     expect(c.category.isNew).toBe(false);
-    expect(c.payload).toEqual({ type: 'list', items: ['butter'] });
+    expect(c.payload).toEqual(L('butter'));
     expect(c.notes.join(' ')).toMatch(/already exists/);
   });
 
   it('"new list groceries" creates an empty list when it does not exist', () => {
     const c = write(parse('new list groceries', catalog()));
     expect(c.category).toMatchObject({ isNew: true, type: 'list', name: 'groceries' });
-    expect(c.payload).toEqual({ type: 'list', items: [] });
+    expect(c.payload).toEqual(L());
   });
 
   it('"add X to Y" works for existing lists', () => {
     const c = write(parse('add eggs, milk to groceries', catalog([['groceries', 'list']])));
     expect(c.category.key).toBe('grocery');
-    expect(c.payload).toEqual({ type: 'list', items: ['eggs', 'milk'] });
+    expect(c.payload).toEqual(L('eggs', 'milk'));
   });
 
   it('an existing list stays a list even when the text looks like a fact', () => {
     const c = write(parse('+ groceries eggs 12', catalog([['groceries', 'list']])));
-    expect(c.payload).toEqual({ type: 'list', items: ['eggs 12'] });
+    expect(c.payload).toEqual(L('eggs 12'));
   });
 });
 
@@ -135,7 +141,7 @@ describe('facts', () => {
   it('without a colon and without a value-like last token, a new entry becomes list items', () => {
     const c = write(parse('+ movies the matrix', catalog()));
     expect(c.category.type).toBe('list');
-    expect(c.payload).toEqual({ type: 'list', items: ['the matrix'] });
+    expect(c.payload).toEqual(L('the matrix'));
   });
 
   it('a single value token stores the category value', () => {
@@ -276,7 +282,7 @@ describe('context: add to the viewed list', () => {
   it('plain text adds to the viewed list', () => {
     const cat = catalog([['groceries', 'list']]);
     const c = write(parse('butter, jam', cat, { kind: 'category', key: 'grocery' }));
-    expect(c.payload).toEqual({ type: 'list', items: ['butter', 'jam'] });
+    expect(c.payload).toEqual(L('butter', 'jam'));
   });
   it('plain text updates the viewed place', () => {
     const cat = catalog([['keys', 'place']]);
@@ -292,5 +298,55 @@ describe('aliases', () => {
   it('user aliases resolve on write', () => {
     const c = write(parse('+ meds aspirin', catalog([['medicine', 'list']], [['meds', 'medicine']])));
     expect(c.category).toMatchObject({ key: 'medicine', isNew: false });
+  });
+});
+
+describe('"add to <list>"', () => {
+  it('strips a leading "to": add to groceries eggs', () => {
+    const c = write(parse('add to groceries eggs', catalog([['groceries', 'list']])));
+    expect(c.category.key).toBe('grocery');
+    expect(c.payload).toEqual(L('eggs'));
+  });
+  it('works for new lists and with the + prefix', () => {
+    const c = write(parse('+ to groceries eggs, milk', catalog()));
+    expect(c.category).toMatchObject({ key: 'grocery', isNew: true });
+    expect(c.payload).toEqual(L('eggs', 'milk'));
+  });
+  it('works after a type keyword: new list to groceries', () => {
+    expect(write(parse('new list to groceries', catalog())).category.name).toBe('groceries');
+  });
+  it('a lone "to" is still a name', () => {
+    expect(write(parse('+ to', catalog())).category.key).toBe('to');
+  });
+});
+
+describe('amounts', () => {
+  it('+groceries eggs:5 creates a list item with an amount', () => {
+    const c = write(parse('+groceries eggs:5', catalog()));
+    expect(c.category.type).toBe('list');
+    expect(c.payload).toEqual(L(['eggs', '5']));
+  });
+  it('units and several items', () => {
+    const c = write(parse('+ pancakes eggs:2, flour:500g, water:200ml, salt', catalog()));
+    expect(c.category.type).toBe('list');
+    expect(c.payload).toEqual(L(['eggs', '2'], ['flour', '500g'], ['water', '200ml'], 'salt'));
+  });
+  it('+groceries flour:1kg', () => {
+    expect(write(parse('+groceries flour:1kg', catalog())).payload).toEqual(L(['flour', '1kg']));
+  });
+  it('a spaced colon in a new category is still a fact', () => {
+    const c = write(parse('+ bank pin: 4533', catalog()));
+    expect(c.category.type).toBe('fact');
+  });
+  it('existing lists accept spaced amounts too', () => {
+    const c = write(parse('+ groceries olive oil: 1 l', catalog([['groceries', 'list']])));
+    expect(c.payload).toEqual(L(['olive oil', '1 l']));
+  });
+  it('a colon that is not an amount stays part of the item in a list', () => {
+    const c = write(parse('+ groceries note: organic', catalog([['groceries', 'list']])));
+    expect(c.payload).toEqual(L('note: organic'));
+  });
+  it('add to groceries eggs:6', () => {
+    expect(write(parse('add to groceries eggs:6', catalog([['groceries', 'list']]))).payload).toEqual(L(['eggs', '6']));
   });
 });

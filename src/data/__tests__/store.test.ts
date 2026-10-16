@@ -192,3 +192,25 @@ describe('Store', () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe('Store amounts', () => {
+  it('stores amounts and a new amount updates an existing item (undoable)', async () => {
+    const { store } = await makeStore();
+    await run(store, '+groceries eggs:5, flour:1kg, salt');
+    const view = () => store.getState().entries.map((e) => [e.value, e.amount]);
+    expect(view()).toEqual([['eggs', '5'], ['flour', '1kg'], ['salt', null]]);
+    const out = await run(store, 'add to groceries eggs:12');
+    expect(out.message).toMatch(/updated eggs 12/);
+    expect(view()).toEqual([['eggs', '12'], ['flour', '1kg'], ['salt', null]]);
+    await store.undo();
+    expect(view()[0]).toEqual(['eggs', '5']);
+  });
+  it('amounts survive export and import', async () => {
+    const { store } = await makeStore();
+    await run(store, '+groceries eggs:5');
+    const file = await store.exportAll();
+    await store.deleteAll();
+    await store.importAll(JSON.parse(JSON.stringify(file)));
+    expect(store.getState().entries[0].amount).toBe('5');
+  });
+});

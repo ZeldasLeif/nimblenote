@@ -1,13 +1,35 @@
 // Timers and alarms as scheduled local notifications (works in Expo Go; remote push is not used).
-// expo-notifications is loaded on first use so it costs nothing at cold start.
+// Only the local-notification parts of expo-notifications are imported. Its package index also loads
+// push-token registration and topic subscription, which Expo Go on Android lacks (that caused the
+// "Cannot find native module 'ExpoTopicSubscriptionModule'" error and the push warning).
+// Loaded on first use so it costs nothing at cold start.
 
 import { Platform } from 'react-native';
 import { store } from './appStore';
 
-type NotificationsModule = typeof import('expo-notifications');
-let mod: Promise<NotificationsModule> | null = null;
-const notifications = () => (mod ??= import('expo-notifications'));
-
+async function load() {
+  const [handler, permissions, schedule, cancel, channel, channelTypes, types] = await Promise.all([
+    import('expo-notifications/build/NotificationsHandler'),
+    import('expo-notifications/build/NotificationPermissions'),
+    import('expo-notifications/build/scheduleNotificationAsync'),
+    import('expo-notifications/build/cancelScheduledNotificationAsync'),
+    import('expo-notifications/build/setNotificationChannelAsync'),
+    import('expo-notifications/build/NotificationChannelManager.types'),
+    import('expo-notifications/build/Notifications.types'),
+  ]);
+  return {
+    setNotificationHandler: handler.setNotificationHandler,
+    getPermissionsAsync: permissions.getPermissionsAsync,
+    requestPermissionsAsync: permissions.requestPermissionsAsync,
+    scheduleNotificationAsync: schedule.scheduleNotificationAsync,
+    cancelScheduledNotificationAsync: cancel.cancelScheduledNotificationAsync,
+    setNotificationChannelAsync: channel.setNotificationChannelAsync,
+    AndroidImportance: channelTypes.AndroidImportance,
+    SchedulableTriggerInputTypes: types.SchedulableTriggerInputTypes,
+  };
+}
+let mod: ReturnType<typeof load> | null = null;
+const notifications = () => (mod ??= load());
 
 const CHANNEL = 'timers';
 let prepared = false;

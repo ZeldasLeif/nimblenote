@@ -1,7 +1,7 @@
 // The one-line preview shown under the input: states exactly what Enter will do.
 
 import { formatDuration } from './duration';
-import type { Command } from './types';
+import type { Command, ListItem } from './types';
 
 export type PreviewTone = 'neutral' | 'write' | 'action' | 'calc' | 'warn';
 export interface Preview { text: string; tone: PreviewTone; note?: string }
@@ -11,8 +11,8 @@ function fmtClock(ts: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function quoteList(items: string[]): string {
-  return items.map((i) => `“${i}”`).join(', ');
+function quoteList(items: ListItem[]): string {
+  return items.map((i) => `“${i.text}”${i.amount ? ` (${i.amount})` : ''}`).join(', ');
 }
 
 export function describe(cmd: Command): Preview | null {
